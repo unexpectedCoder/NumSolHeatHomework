@@ -44,7 +44,7 @@ struct Wall
   double c;               // Specific heat
   std::string material;   // Material's name
 
-  Wall(double r1, double r2, int n, const std::string &material = "NONE");
+  Wall(double r1, double r2, size_t n, const std::string &material = "NONE");
   Wall(const Wall &w);
   ~Wall();
 

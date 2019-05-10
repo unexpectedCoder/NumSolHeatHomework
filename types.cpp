@@ -5,7 +5,7 @@ using namespace std;
 
 
 // *** Wall ***
-Wall::Wall(double r1, double r2, int n, const std::string &material) :
+Wall::Wall(double r1, double r2, size_t n, const std::string &material) :
   lamSize(0), is_lambda(false), epsilon(1.0), rho(0.0), c(0.0), material(material)
 {
   if (r1 < 0.0 || fabs(r2 - r1) < EPS)
@@ -54,7 +54,7 @@ Wall::Wall(const Wall &w)
   for (size_t i = 0; i < lamSize; ++i)
   {
     lambda_T[0][i] = w.lambda_T[0][i];
-    lambda_T[1][i] = w.lambda_T[0][i];
+    lambda_T[1][i] = w.lambda_T[1][i];
   }
   for (size_t i = 0; i < N; ++i)
   {
@@ -102,17 +102,19 @@ Wall& Wall::operator=(const Wall &w)
   for (size_t i = 0; i < 2; ++i)
   {
     lambda_T[i] = new double[lamSize];
-    T[i] = new double[lamSize];
+    T[i] = new double[N];
   }
 
   for (size_t i = 0; i < lamSize; ++i)
   {
     lambda_T[0][i] = w.lambda_T[0][i];
     lambda_T[1][i] = w.lambda_T[0][i];
+  }
+  for (size_t i = 0; i < N; ++i)
+  {
     T[0][i] = w.T[0][i];
     T[1][i] = w.T[1][i];
   }
-  return *this;
 }
 
 
@@ -170,7 +172,7 @@ void Wall::setLambda(const double *T, const double *lam, size_t n)
     lambda_T[i] = new double[lamSize];
   for (size_t i = 0; i < lamSize; ++i)
   {
-    lambda_T[0][i] = T[i] + T_ABS;
+    lambda_T[0][i] = T[i];
     lambda_T[1][i] = lam[i];
   }
 }
