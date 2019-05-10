@@ -9,11 +9,21 @@ using namespace std;
 
 ImplicitDiffSchemeCyl::ImplicitDiffSchemeCyl() :
   wallsN(0), t_ind(0)
-{}
+{
+  interp_f = gsl_interp_eval;
+}
 
 
 ImplicitDiffSchemeCyl::~ImplicitDiffSchemeCyl()
-{}
+{
+  for (size_t i = 0; i < wallsN; ++i)
+  {
+    delete [] a[i];
+    delete [] b[i];
+  }
+  delete [] a;
+  delete [] b;
+}
 
 
 void ImplicitDiffSchemeCyl::addWall(const Wall &w)
@@ -82,15 +92,20 @@ void ImplicitDiffSchemeCyl::prepareInterp()
   // Using linear interpolation for materials
   // because temperature changes in narrow interval
   lLam = new gsl_interp*[wallsN];
+  l_crho = new gsl_interp*[wallsN];
   for (size_t i = 0; i < wallsN; ++i)
   {
+    // Lambda
     lLam[i] = gsl_interp_alloc(gsl_interp_linear, walls[i].dataSize);
     gsl_interp_init(lLam[i],
                     walls[i].lambda_T[0], walls[i].lambda_T[1],
                     walls[i].dataSize);
+    // c*rho
+    l_crho[i] = gsl_interp_alloc(gsl_interp_linear, walls[i].dataSize);
+    gsl_interp_init(l_crho[i],
+                    walls[i].crho[0], walls[i].crho[1],
+                    walls[i].dataSize);
   }
-
-  lLam_f = gsl_interp_eval;
 }
 
 
@@ -117,6 +132,12 @@ void ImplicitDiffSchemeCyl::calcDF()
 
 void ImplicitDiffSchemeCyl::setStartDF(size_t i)
 {
+  if (i > 0)
+  {
+    a[i][0] = a[i - 1][walls[i - 1].N - 1];
+    b[i][0] = b[i - 1][walls[i - 1].N - 1];
+    return;
+  }
   if (fabs(bound1.q - 0.0) < EPS)
   {
     a[i][0] = 1.0;

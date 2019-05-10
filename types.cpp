@@ -16,8 +16,8 @@ Wall::Wall(double r1, double r2, size_t n, const std::string &material) :
 
   this->r1 = r1;
   this->r2 = r2;
-  N = n;
-  step = (r2 - r1) / N;
+  N = n + 1;
+  step = (r2 - r1) / (N - 1);
 
   lambda_T = new double*[2];
   T = new double*[2];

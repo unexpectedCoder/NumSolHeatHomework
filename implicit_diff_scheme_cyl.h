@@ -31,8 +31,8 @@ private:
   // For interpolation
   gsl_interp_accel *acc;
   gsl_interp **lLam;          // 'l*' means 'linear'
-  // Interp func for lambda of wall material
-  double (*lLam_f)(const gsl_interp*, const double*, const double*, double, gsl_interp_accel*);
+  gsl_interp **l_crho;
+  double (*interp_f)(const gsl_interp*, const double*, const double*, double, gsl_interp_accel*);
   // .................
 
   size_t t_ind;               // Current time layer index
