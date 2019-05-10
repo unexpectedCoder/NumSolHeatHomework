@@ -33,7 +33,10 @@ void Wall::setLambda(const string& file_path)
   for (size_t i = 0; i < 2; ++i)
     lambda_T[i] = new double[lamSize];
   for (size_t i = 0; i < lamSize; ++i)
+  {
     file >> lambda_T[0][i] >> lambda_T[1][i];
+    lambda_T[0][i] += T_ABS;
+  }
   file.close();
 }
 
@@ -54,10 +57,9 @@ void Wall::setLambda(const double *T, const double *lam, size_t n)
   lamSize = n;
   for (size_t i = 0; i < 2; ++i)
     lambda_T[i] = new double[lamSize];
-
   for (size_t i = 0; i < lamSize; ++i)
   {
-    lambda_T[0][i] = T[i];
+    lambda_T[0][i] = T[i] + T_ABS;
     lambda_T[1][i] = lam[i];
   }
 }
