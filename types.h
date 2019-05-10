@@ -2,7 +2,6 @@
 #define TYPES_H
 
 #include <fstream>
-//#include <iostream>
 #include <vector>
 #include <string>
 #include <math.h>
@@ -28,12 +27,12 @@ struct Error
 };
 
 
-// *** WALL ***
+// *** Wall (settlement layer) ***
 struct Wall
 {
   Error err;
 
-  int N;                  // Number of spacing segments
+  size_t N;                  // Number of spacing segments
   double r1, r2;          // Inner and outer radius of cylinder
   double step;            // Space step
   double **lambda_T;      // lambda(T) - wall's heat transfer coeff
@@ -45,86 +44,11 @@ struct Wall
   double c;               // Specific heat
   std::string material;   // Material's name
 
-  Wall(double r1, double r2, int n, const std::string &material = "NONE") :
-    lamSize(0), is_lambda(false), epsilon(1.0), rho(0.0), c(0.0), material(material)
-  {
-    if (r1 < 0.0 || fabs(r2 - r1) < EPS)
-      throw err.sendEx("r1 < 0 or r2 < r1");
-    if (n < 2)
-      throw err.sendEx("number of segments < 1");
+  Wall(double r1, double r2, int n, const std::string &material = "NONE");
+  Wall(const Wall &w);
+  ~Wall();
 
-    this->r1 = r1;
-    this->r2 = r2;
-    N = n;
-    step = (r2 - r1) / N;
-
-    lambda_T = new double*[2];
-    T = new double*[2];
-  }
-
-  Wall(const Wall &w)
-  {
-    N = w.N;
-    r1 = w.r1;
-    r2 = w.r2;
-    step = w.step;
-    lamSize = w.lamSize;
-    is_lambda = w.is_lambda;
-    epsilon = w.epsilon;
-    rho = w.rho;
-    c = w.c;
-    material = w.material;
-
-    lambda_T = new double*[2];
-    T = new double*[2];
-    for (size_t i = 0; i < 2; ++i)
-    {
-      lambda_T[i] = new double[lamSize];
-      T[i] = new double[lamSize];
-    }
-
-    for (size_t i = 0; i < lamSize; ++i)
-    {
-      lambda_T[0][i] = w.lambda_T[0][i];
-      lambda_T[1][i] = w.lambda_T[0][i];
-      T[0][i] = w.T[0][i];
-      T[1][i] = w.T[1][i];
-    }
-  }
-
-  Wall& operator=(const Wall &w)
-  {
-    if (this == &w)
-      return *this;
-
-    N = w.N;
-    r1 = w.r1;
-    r2 = w.r2;
-    step = w.step;
-    lamSize = w.lamSize;
-    is_lambda = w.is_lambda;
-    epsilon = w.epsilon;
-    rho = w.rho;
-    c = w.c;
-    material = w.material;
-
-    lambda_T = new double*[2];
-    T = new double*[2];
-    for (size_t i = 0; i < 2; ++i)
-    {
-      lambda_T[i] = new double[lamSize];
-      T[i] = new double[lamSize];
-    }
-
-    for (size_t i = 0; i < lamSize; ++i)
-    {
-      lambda_T[0][i] = w.lambda_T[0][i];
-      lambda_T[1][i] = w.lambda_T[0][i];
-      T[0][i] = w.T[0][i];
-      T[1][i] = w.T[1][i];
-    }
-    return *this;
-  }
+  Wall& operator=(const Wall &w);
 
   void setLambda(const std::string& file_path);
   void setLambda(const double *T, const double *lam, size_t n);
@@ -134,17 +58,6 @@ struct Wall
   void setSpecificHeat(double c);
 
   inline friend std::ostream& operator<<(std::ostream &os, const Wall &w);
-
-  ~Wall()
-  {
-    for (size_t i = 0; i < 2; ++i)
-    {
-      delete [] lambda_T[i];
-      delete [] T[i];
-    }
-    delete [] lambda_T;
-    delete [] T;
-  }
 };
 
 
@@ -166,8 +79,14 @@ std::ostream& operator<<(std::ostream &os, const Wall &w)
     os << "\t#" << i + 1 << ".\t"
        << w.lambda_T[0][i] - T_ABS << '\t'
        << w.lambda_T[1][i] << '\n';
-  os << '\n';
 
+  os << "\tT(r):\n\tr, m\tT, C\n";
+  if (w.T)
+    for (size_t i = 0; i < w.N; ++i)
+      if (w.T[i])
+        os << '\t' << w.T[0][i] << '\t' << w.T[1][i] - T_ABS << '\n';
+
+  os << '\n';
   return os;
 }
 
@@ -175,32 +94,33 @@ std::ostream& operator<<(std::ostream &os, const Wall &w)
 typedef std::vector<Wall> Walls;
 typedef std::vector<Wall>::iterator WallItr;
 typedef std::vector<Wall>::const_iterator WallCItr;
-// *** END OF WALL ***
+// *** END OF Wall ***
 
 
 // *** Boundary conditions (type 2) ***
-struct BoundConds2
+struct BoundConds
 {
-  int type;
-  double q;
+  int type;             // Type of boundary conditions:
+  double q;             // for type 2 (heat flow to wall)
+  double T_amb, alpha;  // for type 3 (ambient T and heat emission coeff)
 
-  BoundConds2(double q) : type(2), q(q) {}
-  ~BoundConds2() {}
+  BoundConds() : type(0), q(0.0), T_amb(0.0), alpha(0.0) {}
 };
-// *** END OF boundary conditions (type 2) ***
+// *** END OF boundary conditions ***
 
 
-// *** Boundary conditions (type 3) ***
-struct BoundConds3
+// *** Starting conditions ***
+struct StartConds
 {
-  int type;
-  double T_amb, alpha;
+  double T, T_amb;
+  double D, H;
+  double time;
 
-  BoundConds3(double t_ambient_C, double alpha) :
-    type(3), T_amb(t_ambient_C + T_ABS), alpha(alpha) {}
-  ~BoundConds3() {}
+  StartConds(double t_C, double t_amb_C, double d, double h, double t = 0.0) :
+    T(t_C + T_ABS), T_amb(t_amb_C + T_ABS), D(d), H(h), time(t) {}
+  ~StartConds() {}
 };
-// *** END OF boundary conditions (type 3) ***
+// *** END OF Starting conditions ***
 
 
 #endif // TYPES_H

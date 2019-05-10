@@ -4,7 +4,118 @@
 using namespace std;
 
 
-// ___ WALL FUNCS ___
+// *** Wall ***
+Wall::Wall(double r1, double r2, int n, const std::string &material) :
+  lamSize(0), is_lambda(false), epsilon(1.0), rho(0.0), c(0.0), material(material)
+{
+  if (r1 < 0.0 || fabs(r2 - r1) < EPS)
+    throw err.sendEx("r1 < 0 or r2 < r1");
+  if (n < 2)
+    throw err.sendEx("number of segments < 1");
+
+  this->r1 = r1;
+  this->r2 = r2;
+  N = n;
+  step = (r2 - r1) / N;
+
+  lambda_T = new double*[2];
+  T = new double*[2];
+}
+
+
+Wall::Wall(const Wall &w)
+{
+  /*
+   * Copy constructor is needed for the correct
+   * deliting ** pointers of this structure
+   * in case of using std::vector
+   * or using this structure in other parts of code.
+  */
+
+  N = w.N;
+  r1 = w.r1;
+  r2 = w.r2;
+  step = w.step;
+  lamSize = w.lamSize;
+  is_lambda = w.is_lambda;
+  epsilon = w.epsilon;
+  rho = w.rho;
+  c = w.c;
+  material = w.material;
+
+  lambda_T = new double*[2];
+  T = new double*[2];
+  for (size_t i = 0; i < 2; ++i)
+  {
+    lambda_T[i] = new double[lamSize];
+    T[i] = new double[N];
+  }
+
+  for (size_t i = 0; i < lamSize; ++i)
+  {
+    lambda_T[0][i] = w.lambda_T[0][i];
+    lambda_T[1][i] = w.lambda_T[0][i];
+  }
+  for (size_t i = 0; i < N; ++i)
+  {
+    T[0][i] = w.T[0][i];
+    T[1][i] = w.T[1][i];
+  }
+}
+
+
+Wall::~Wall()
+{
+  for (size_t i = 0; i < 2; ++i)
+  {
+    delete [] lambda_T[i];
+    delete [] T[i];
+  }
+  delete [] lambda_T;
+  delete [] T;
+}
+
+
+Wall& Wall::operator=(const Wall &w)
+{
+  /*
+   * Overwriting this operator is needed
+   * for the same reasons as the copy constructor.
+  */
+
+  if (this == &w)
+    return *this;
+
+  N = w.N;
+  r1 = w.r1;
+  r2 = w.r2;
+  step = w.step;
+  lamSize = w.lamSize;
+  is_lambda = w.is_lambda;
+  epsilon = w.epsilon;
+  rho = w.rho;
+  c = w.c;
+  material = w.material;
+
+  lambda_T = new double*[2];
+  T = new double*[2];
+  for (size_t i = 0; i < 2; ++i)
+  {
+    lambda_T[i] = new double[lamSize];
+    T[i] = new double[lamSize];
+  }
+
+  for (size_t i = 0; i < lamSize; ++i)
+  {
+    lambda_T[0][i] = w.lambda_T[0][i];
+    lambda_T[1][i] = w.lambda_T[0][i];
+    T[0][i] = w.T[0][i];
+    T[1][i] = w.T[1][i];
+  }
+  return *this;
+}
+
+
 void Wall::setLambda(const string& file_path)
 {
   /*
@@ -72,9 +183,9 @@ void Wall::setStartTemperature(double temp_C)
 
   for (int i = 0; i < 2; ++i)
     T[i] = new double[N];
-  for (int i = 0; i < N; ++i)
+  for (size_t i = 0; i < N; ++i)
   {
-    T[0][i] = 0.0;
+    T[0][i] = step * i;
     T[1][i] = temp_C + T_ABS;
   }
 }

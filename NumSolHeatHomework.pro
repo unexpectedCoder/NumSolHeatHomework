@@ -39,3 +39,12 @@ HEADERS += \
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
+
+unix:!macx: LIBS += -L$$PWD/../../../../usr/local/lib/ -lgsl
+unix:!macx: LIBS += -L$$PWD/../../../../usr/local/lib/ -lgslcblas
+
+INCLUDEPATH += $$PWD/../../../../usr/local/include
+DEPENDPATH += $$PWD/../../../../usr/local/include
+
+unix:!macx: PRE_TARGETDEPS += $$PWD/../../../../usr/local/lib/libgsl.a
+unix:!macx: PRE_TARGETDEPS += $$PWD/../../../../usr/local/lib/libgslcblas.a
