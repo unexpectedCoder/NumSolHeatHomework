@@ -6,14 +6,17 @@
 #include <string>
 #include <math.h>
 
-#define EPS 1e-12
+#define EPS 1e-12       // Accuracy
+#define T_ABS 273.15    // Absolute difference between C and K
 
 
 struct Error
 {
+  std::string mess = "";
   const std::string& sendEx(const std::string& ex)
   {
-    return ex;
+    mess = "\n\tError: " + ex + "!\n";
+    return mess;
   }
 };
 
@@ -23,19 +26,24 @@ struct Wall
 {
   Error err;
 
-  int N;
-  double r1, r2;
-  double step;
-  double **lambda_T;
-  size_t lamSize;
-  bool is_lambda;
+  int N;              // Number of spacing segments
+  double r1, r2;      // Inner and outer radius of cylinder
+  double step;        // Space step
+  double **lambda_T;  // lambda(T) - wall's heat transfer coeff
+  size_t lamSize;     // Size of lambda data
+  bool is_lambda;     // Was the lambda(T) initialized
+  double **T;         // T(tau): [0][:] - time, [1][:] - temperature
+  double epsilon;     // Blackness
+  double rho;         // Material density
+  double c;           // Specific heat
 
-  Wall(double r1, double r2, int n) : lamSize(0), is_lambda(false)
+  Wall(double r1, double r2, int n) :
+    lamSize(0), is_lambda(false), epsilon(1.0)
   {
     if (r1 < 0.0 || fabs(r2 - r1) < EPS)
-      throw err.sendEx("\n\tError: r1 < 0 or r2 < r1!\n");
+      throw err.sendEx("r1 < 0 or r2 < r1");
     if (n < 2)
-      throw err.sendEx("\n\tError: number of segments < 1!\n");
+      throw err.sendEx("number of segments < 1");
 
     this->r1 = r1;
     this->r2 = r2;
@@ -43,66 +51,50 @@ struct Wall
     step = (r2 - r1) / N;
 
     lambda_T = new double*[2];
+    T = new double*[2];
   }
 
   ~Wall()
   {
     for (size_t i = 0; i < 2; ++i)
+    {
       delete [] lambda_T[i];
+      delete [] T[i];
+    }
     delete [] lambda_T;
+    delete [] T;
   }
 
   void setLambda(const std::string& file_path);
   void setLambda(const double *T, const double *lam, size_t n);
+  void setStartTemperature(double temp_C);
+  void setBlackness(double epsilon);
+  void setDens(double rho);
+  void setSpecificHeat(double c);
 };
 
 
-// ___ WALL FUNCS ___
-void Wall::setLambda(const std::string& file_path)
+// *** Boundary conditions (type 2) ***
+struct BoundConds2
 {
-  if (is_lambda)
-    throw err.sendEx("\n\tError: lamba is already set!\n");
-  is_lambda = true;
+  int type;
+  double q;
 
-  std::ifstream file(file_path.c_str(), std::ios_base::out);
-  if (!file.is_open())
-    throw err.sendEx("\n\tError: file is not opened!\n");
+  BoundConds2(double q) : type(2), q(q) {}
+  ~BoundConds2() {}
+};
 
-  double buf;
-  while (!file.eof())
-  {
-    file >> buf >> buf;
-    ++lamSize;
-  }
-  lamSize--;
-  file.close();
 
-  file.open(file_path.c_str(), std::ios_base::out);
-  for (size_t i = 0; i < 2; ++i)
-    lambda_T[i] = new double[lamSize];
-  for (size_t i = 0; i < lamSize; ++i)
-    file >> lambda_T[0][i] >> lambda_T[1][i];
-  file.close();
-}
-
-void Wall::setLambda(const double *T, const double *lam, size_t n)
+// *** Boundary conditions (type 3) ***
+struct BoundConds3
 {
-  if (is_lambda)
-    throw err.sendEx("\n\tError: lamba is already set!\n");
-  is_lambda = true;
-  if (n < 2)
-    throw err.sendEx("\n\tError: arrays' size < 2!\n");
+  int type;
+  double T_amb, alpha;
 
-  lamSize = n;
-  for (size_t i = 0; i < 2; ++i)
-    lambda_T[i] = new double[lamSize];
-
-  for (size_t i = 0; i < lamSize; ++i)
-  {
-    lambda_T[0][i] = T[i];
-    lambda_T[1][i] = lam[i];
-  }
-}
+  BoundConds3(double t_ambient_C, double alpha) :
+    type(3), T_amb(t_ambient_C + T_ABS), alpha(alpha) {}
+  ~BoundConds3() {}
+};
 
 
 #endif // TYPES_H
