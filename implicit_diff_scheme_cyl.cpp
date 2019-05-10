@@ -8,7 +8,7 @@ using namespace std;
 
 
 ImplicitDiffSchemeCyl::ImplicitDiffSchemeCyl() :
-  wallsN(0)
+  wallsN(0), t_ind(0)
 {}
 
 
@@ -59,6 +59,7 @@ void ImplicitDiffSchemeCyl::solve(double dt, double t_end_C)
   double T_end = t_end_C + T_ABS;
 
   prepareInterp();
+  giveMemDF();
 }
 
 
@@ -83,29 +84,56 @@ void ImplicitDiffSchemeCyl::prepareInterp()
   lLam = new gsl_interp*[wallsN];
   for (size_t i = 0; i < wallsN; ++i)
   {
-    lLam[i] = gsl_interp_alloc(gsl_interp_linear, walls[i].lamSize);
+    lLam[i] = gsl_interp_alloc(gsl_interp_linear, walls[i].dataSize);
     gsl_interp_init(lLam[i],
                     walls[i].lambda_T[0], walls[i].lambda_T[1],
-                    walls[i].lamSize);
+                    walls[i].dataSize);
+  }
+
+  lLam_f = gsl_interp_eval;
+}
+
+
+void ImplicitDiffSchemeCyl::giveMemDF()
+{
+  a = new double*[wallsN];
+  b = new double*[wallsN];
+  for (size_t i = 0; i < wallsN; ++i)
+  {
+    a[i] = new double[walls[i].N];
+    b[i] = new double[walls[i].N];
   }
 }
 
 
 void ImplicitDiffSchemeCyl::calcDF()
 {
-  setStartDF();
+  for (size_t i = 0; i < wallsN; ++i)
+  {
+    setStartDF(i);
+  }
 }
 
 
-void ImplicitDiffSchemeCyl::setStartDF()
+void ImplicitDiffSchemeCyl::setStartDF(size_t i)
 {
   if (fabs(bound1.q - 0.0) < EPS)
   {
-    a.push_back(1.0);
-    b.push_back(0.0);
+    a[i][0] = 1.0;
+    b[i][0] = 0.0;
     return;
   }
   throw err.sendEx("program is not ready for this shit yet");
+}
+
+
+double ImplicitDiffSchemeCyl::calcTempCoeff(size_t i, char plus_minus)
+{
+  if (plus_minus == '+')
+  {
+    return -1.0;
+  }
+  return -1.0;
 }
 
 

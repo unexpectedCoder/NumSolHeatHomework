@@ -6,7 +6,8 @@ using namespace std;
 
 // *** Wall ***
 Wall::Wall(double r1, double r2, size_t n, const std::string &material) :
-  lamSize(0), is_lambda(false), epsilon(1.0), rho(0.0), c(0.0), material(material)
+  dataSize(0), is_lambda(false), is_crho(false),
+  epsilon(1.0), rho(0.0), c(0.0), material(material)
 {
   if (r1 < 0.0 || fabs(r2 - r1) < EPS)
     throw err.sendEx("r1 < 0 or r2 < r1");
@@ -20,6 +21,7 @@ Wall::Wall(double r1, double r2, size_t n, const std::string &material) :
 
   lambda_T = new double*[2];
   T = new double*[2];
+  crho = new double*[2];
 }
 
 
@@ -36,7 +38,7 @@ Wall::Wall(const Wall &w)
   r1 = w.r1;
   r2 = w.r2;
   step = w.step;
-  lamSize = w.lamSize;
+  dataSize = w.dataSize;
   is_lambda = w.is_lambda;
   epsilon = w.epsilon;
   rho = w.rho;
@@ -45,16 +47,20 @@ Wall::Wall(const Wall &w)
 
   lambda_T = new double*[2];
   T = new double*[2];
+  crho = new double*[2];
   for (size_t i = 0; i < 2; ++i)
   {
-    lambda_T[i] = new double[lamSize];
+    lambda_T[i] = new double[dataSize];
     T[i] = new double[N];
+    crho[i] = new double[dataSize];
   }
 
-  for (size_t i = 0; i < lamSize; ++i)
+  for (size_t i = 0; i < dataSize; ++i)
   {
     lambda_T[0][i] = w.lambda_T[0][i];
     lambda_T[1][i] = w.lambda_T[1][i];
+    crho[0][i] = w.crho[0][i];
+    crho[1][i] = w.crho[1][i];
   }
   for (size_t i = 0; i < N; ++i)
   {
@@ -70,9 +76,11 @@ Wall::~Wall()
   {
     delete [] lambda_T[i];
     delete [] T[i];
+    delete [] crho[i];
   }
   delete [] lambda_T;
   delete [] T;
+  delete [] crho;
 }
 
 
@@ -90,7 +98,7 @@ Wall& Wall::operator=(const Wall &w)
   r1 = w.r1;
   r2 = w.r2;
   step = w.step;
-  lamSize = w.lamSize;
+  dataSize = w.dataSize;
   is_lambda = w.is_lambda;
   epsilon = w.epsilon;
   rho = w.rho;
@@ -99,22 +107,28 @@ Wall& Wall::operator=(const Wall &w)
 
   lambda_T = new double*[2];
   T = new double*[2];
+  crho = new double*[2];
   for (size_t i = 0; i < 2; ++i)
   {
-    lambda_T[i] = new double[lamSize];
+    lambda_T[i] = new double[dataSize];
     T[i] = new double[N];
+    crho[i] = new double[dataSize];
   }
 
-  for (size_t i = 0; i < lamSize; ++i)
+  for (size_t i = 0; i < dataSize; ++i)
   {
     lambda_T[0][i] = w.lambda_T[0][i];
-    lambda_T[1][i] = w.lambda_T[0][i];
+    lambda_T[1][i] = w.lambda_T[1][i];
+    crho[0][i] = w.crho[0][i];
+    crho[1][i] = w.crho[1][i];
   }
   for (size_t i = 0; i < N; ++i)
   {
     T[0][i] = w.T[0][i];
     T[1][i] = w.T[1][i];
   }
+
+  return *this;
 }
 
 
@@ -137,15 +151,15 @@ void Wall::setLambda(const string& file_path)
   while (!file.eof())
   {
     file >> buf >> buf;
-    ++lamSize;
+    ++dataSize;
   }
-  lamSize--;
+  dataSize--;
   file.close();
 
   file.open(file_path.c_str(), ios_base::out);
   for (size_t i = 0; i < 2; ++i)
-    lambda_T[i] = new double[lamSize];
-  for (size_t i = 0; i < lamSize; ++i)
+    lambda_T[i] = new double[dataSize];
+  for (size_t i = 0; i < dataSize; ++i)
   {
     file >> lambda_T[0][i] >> lambda_T[1][i];
     lambda_T[0][i] += T_ABS;
@@ -161,19 +175,44 @@ void Wall::setLambda(const double *T, const double *lam, size_t n)
    * using source array T and lambda.
   */
 
+  if (dataSize != 0 && n != dataSize)
+    throw err.sendEx("set size != data size");
+  if (n < 2)
+    throw err.sendEx("arrays' size < 2");
   if (is_lambda)
     throw err.sendEx("lamba is already set");
   is_lambda = true;
-  if (n < 2)
-    throw err.sendEx("arrays' size < 2");
 
-  lamSize = n;
+  if (dataSize == 0)
+    dataSize = n;
   for (size_t i = 0; i < 2; ++i)
-    lambda_T[i] = new double[lamSize];
-  for (size_t i = 0; i < lamSize; ++i)
+    lambda_T[i] = new double[dataSize];
+  for (size_t i = 0; i < dataSize; ++i)
   {
     lambda_T[0][i] = T[i];
     lambda_T[1][i] = lam[i];
+  }
+}
+
+
+void Wall::set_crho(const double *T, const double *c_rho, size_t n)
+{
+  if (dataSize != 0 && n != dataSize)
+    throw err.sendEx("set size != data size");
+  if (n < 2)
+    throw err.sendEx("arrays' size < 2");
+  if (is_crho)
+    throw err.sendEx("c*rho is already set");
+  is_crho = true;
+
+  if (dataSize == 0)
+    dataSize = n;
+  for (size_t i = 0; i < 2; ++i)
+    crho[i] = new double[dataSize];
+  for (size_t i = 0; i < dataSize; ++i)
+  {
+    crho[0][i] = T[i];
+    crho[1][i] = c_rho[i];
   }
 }
 

@@ -32,12 +32,14 @@ struct Wall
 {
   Error err;
 
-  size_t N;                  // Number of spacing segments
+  size_t N;               // Number of spacing segments
   double r1, r2;          // Inner and outer radius of cylinder
   double step;            // Space step
   double **lambda_T;      // lambda(T) - wall's heat transfer coeff
-  size_t lamSize;         // Size of lambda data
+  size_t dataSize;        // Size of lambda data
   bool is_lambda;         // Was the lambda(T) initialized
+  double **crho;          // c*rho of material
+  bool is_crho;           // Was the (c*rho)(T) initialized
   double **T;             // T(tau): [0][:] - time, [1][:] - temperature
   double epsilon;         // Blackness
   double rho;             // Material density
@@ -52,6 +54,7 @@ struct Wall
 
   void setLambda(const std::string& file_path);
   void setLambda(const double *T, const double *lam, size_t n);
+  void set_crho(const double *T, const double *crho, size_t n);
   void setStartTemperature(double temp_C);
   void setBlackness(double epsilon);
   void setDens(double rho);
@@ -75,7 +78,7 @@ std::ostream& operator<<(std::ostream &os, const Wall &w)
 
   os << "\tlambda(T):\n"
      << "\t\tT, C\tlambda, W/(m*K)\n";
-  for (size_t i = 0; i < w.lamSize; ++i)
+  for (size_t i = 0; i < w.dataSize; ++i)
     os << "\t#" << i + 1 << ".\t"
        << w.lambda_T[0][i] - T_ABS << '\t'
        << w.lambda_T[1][i] << '\n';
