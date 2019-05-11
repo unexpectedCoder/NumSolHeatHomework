@@ -37,9 +37,13 @@ void ImplicitDiffSchemeCyl::setStartConds(const StartConds &sc)
 {
   H = sc.H;
   D = sc.D;
-  T0 = sc.T;
-  T_amb = sc.T_amb;
+  T0 = sc.T0;
   time = sc.time;
+
+  Tw_vec.push_back(T0);
+  t_vec.push_back(time);
+
+  setStartTemperature();
 }
 
 
@@ -59,14 +63,33 @@ void ImplicitDiffSchemeCyl::setSecondBound(const BoundConds &bc)
 }
 
 
-void ImplicitDiffSchemeCyl::solve(double dt, double t_end_C)
+void ImplicitDiffSchemeCyl::setEnvironment(double t_amb_C, const string &src_path)
 {
-  if (t_end_C < -T_ABS)
+  if (t_amb_C < -T_ABS)
     throw err.sendEx("temperature is set less than absolute 0");
+
+  fstream file(src_path.c_str(), ios_base::in);
+  if (!file.is_open())
+    throw err.sendEx("file is not opened");
+  file.close();
+
+  env.Ta = t_amb_C + T_ABS;
+  env.dataSize = calcEnvSize(src_path);
+  giveMemEnv();
+  readEnvData(src_path);
+
+  cout << env << '\n';
+}
+
+
+void ImplicitDiffSchemeCyl::solve(double dt, double delta_T)
+{
+  if (delta_T < 0.0)
+    throw err.sendEx("temperature is set less than ambient temperature");
   if (dt < 0.0)
     throw err.sendEx("time step must be > 0");
 
-  double T_end = t_end_C + T_ABS;
+  double T_end = env.Ta + delta_T;
 
   prepareInterp();
   giveMemDF();
@@ -85,6 +108,73 @@ void ImplicitDiffSchemeCyl::showWalls() const
 
 
 // *** PRIVATE ***
+void ImplicitDiffSchemeCyl::setStartTemperature()
+{
+  if (T0 < 0.0)
+    throw err.sendEx("invalid temperature (less than absolute 0)");
+
+  for (WallItr itr = walls.begin(); itr != walls.end(); ++itr)
+  {
+    if (itr->is_T)
+      throw err.sendEx("T(tau) was already initialized");
+
+    for (size_t i = 0; i < itr->N; ++i)
+    {
+      itr->T[0][i] = itr->step * i;
+      itr->T[1][i] = T0;
+    }
+    itr->is_T = true;
+  }
+}
+
+
+size_t ImplicitDiffSchemeCyl::calcEnvSize(const string &path)
+{
+  size_t s = 0;
+  fstream f(path.c_str(), ios_base::in);
+  string buf;
+
+  while (!f.eof())
+  {
+    for (int i = 0; i < 8; ++i)
+      f >> buf;
+    s++;
+  }
+
+  f.close();
+  return --s;
+}
+
+
+void ImplicitDiffSchemeCyl::giveMemEnv()
+{
+  env.T = new double[env.dataSize];
+  env.a = new double[env.dataSize];
+  env.c = new double[env.dataSize];
+  env.Pr = new double[env.dataSize];
+  env.mu = new double[env.dataSize];
+  env.nu = new double[env.dataSize];
+  env.rho = new double[env.dataSize];
+  env.lambda = new double[env.dataSize];
+}
+
+
+void ImplicitDiffSchemeCyl::readEnvData(const string &path)
+{
+  fstream f(path.c_str(), ios_base::in);
+
+  for (size_t i = 0; i < env.dataSize; ++i)
+  {
+    f >> env.T[i] >> env.lambda[i]
+      >> env.rho[i] >> env.c[i]
+      >> env.a[i] >> env.nu[i]
+      >> env.mu[i] >> env.Pr[i];
+  }
+
+  f.close();
+}
+
+
 void ImplicitDiffSchemeCyl::prepareInterp()
 {
   acc = gsl_interp_accel_alloc();
@@ -112,11 +202,15 @@ void ImplicitDiffSchemeCyl::prepareInterp()
 void ImplicitDiffSchemeCyl::giveMemDF()
 {
   a = new double*[wallsN];
+  A = new double*[wallsN];
   b = new double*[wallsN];
+  B = new double*[wallsN];
   for (size_t i = 0; i < wallsN; ++i)
   {
     a[i] = new double[walls[i].N];
+    A[i] = new double[walls[i].N];
     b[i] = new double[walls[i].N];
+    B[i] = new double[walls[i].N];
   }
 }
 
@@ -138,10 +232,10 @@ void ImplicitDiffSchemeCyl::setStartDF(size_t i)
     b[i][0] = b[i - 1][walls[i - 1].N - 1];
     return;
   }
-  if (fabs(bound1.q - 0.0) < EPS)
+  if (fabs(bound1.q - 0.0) < EPS)           // i == 0
   {
-    a[i][0] = 1.0;
-    b[i][0] = 0.0;
+    a[0][0] = 1.0;
+    b[0][0] = 0.0;
     return;
   }
   throw err.sendEx("program is not ready for this shit yet");

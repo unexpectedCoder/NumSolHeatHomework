@@ -41,6 +41,7 @@ struct Wall
   double **crho;          // c*rho of material
   bool is_crho;           // Was the (c*rho)(T) initialized
   double **T;             // T(tau): [0][:] - time, [1][:] - temperature
+  bool is_T;              // Was the T(tau) initialized
   double epsilon;         // Blackness
   double rho;             // Material density
   double c;               // Specific heat
@@ -55,7 +56,6 @@ struct Wall
   void setLambda(const std::string& file_path);
   void setLambda(const double *T, const double *lam, size_t n);
   void set_crho(const double *T, const double *crho, size_t n);
-  void setStartTemperature(double temp_C);
   void setBlackness(double epsilon);
   void setDens(double rho);
   void setSpecificHeat(double c);
@@ -66,7 +66,7 @@ struct Wall
 
 std::ostream& operator<<(std::ostream &os, const Wall &w)
 {
-  os << "\n... Wall ...:\n"
+  os << "\n\t..... WALL .....\n"
      << "\tmaterial: " << w.material << '\n'
      << "\tN: " << w.N << '\n'
      << "\tr1, m: " << w.r1 << '\n'
@@ -100,6 +100,49 @@ typedef std::vector<Wall>::const_iterator WallCItr;
 // *** END OF Wall ***
 
 
+// *** Environment ***
+struct Environment
+{
+  double Ta;        // Ambient temperature
+  // Table data for future interpolation
+  size_t dataSize;
+  double *T;
+  double *lambda;
+  double *a;
+  double *c;
+  double *rho;
+  double *nu;
+  double *mu;
+  double *Pr;
+
+  Environment() : Ta(0.0), dataSize(0) {}
+  ~Environment();
+
+  inline friend std::ostream& operator<<(std::ostream &os,
+                                         const Environment &e);
+};
+
+
+std::ostream& operator<<(std::ostream &os, const Environment &e)
+{
+  os << "\t..... ENVIRONMENT .....\n";
+  os << "\tt, C\t\tlambda\t\trho\t\tcp\t\ta\t\tnu\t\tmu\t\tPr\n";
+  for (size_t i = 0; i < e.dataSize; ++i)
+    os << '\t' << e.T[i]
+       << "\t\t" << e.lambda[i]
+       << "\t\t" << e.rho[i]
+       << "\t\t" << e.c[i]
+       << "\t\t" << e.a[i]
+       << "\t\t" << e.nu[i]
+       << "\t\t" << e.mu[i]
+       << "\t\t" << e.Pr[i] << '\n';
+
+  os << '\n';
+  return os;
+}
+// *** END OF Environment ***
+
+
 // *** Boundary conditions (type 2) ***
 struct BoundConds
 {
@@ -115,13 +158,17 @@ struct BoundConds
 // *** Starting conditions ***
 struct StartConds
 {
-  double T, T_amb;
-  double D, H;
-  double time;
+  Error err;
 
-  StartConds(double t_C, double t_amb_C, double d, double h, double t = 0.0) :
-    T(t_C + T_ABS), T_amb(t_amb_C + T_ABS), D(d), H(h), time(t) {}
+  double T0;    // Walls starting temperature
+  double D, H;  // Cylinder geometry
+  double time;  // Starting time
+
+  StartConds(double t_C, double t = 0.0) :
+    T0(t_C + T_ABS), time(t) {}
   ~StartConds() {}
+
+  void setGeometry(const Walls &ws, double h);
 };
 // *** END OF Starting conditions ***
 

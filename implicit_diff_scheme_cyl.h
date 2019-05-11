@@ -18,15 +18,14 @@ private:
   Walls walls;                // Vector of walls
   size_t wallsN;              // Amount of walls
   BoundConds bound1, bound2;  // Left & right boundary conditions
+  Environment env;            // Environment data
   double H, D;                // Outer geometry
   double T0;                  // Start temperature
   double time;                // Current time
-  double T_amb;               // Ambient temperature
-  double Tw;                  // Current wall temperature
 
   // Driving factors (DF)
-  double **a;
-  double **b;
+  double **a, **A;
+  double **b, **B;
 
   // For interpolation
   gsl_interp_accel *acc;
@@ -37,7 +36,11 @@ private:
 
   size_t t_ind;               // Current time layer index
 
+  // Buffers
+  double Tl, T, Tr;           // Left, current and right temperature
+
   // For the results
+  double Tw;                  // Current wall temperature
   std::vector<double> t_vec;  // Time vector
   std::vector<double> Tw_vec; // Wall temperature vector
 
@@ -49,6 +52,7 @@ public:
   void setStartConds(const StartConds &sc);
   void setFirstBound(const BoundConds &bc);
   void setSecondBound(const BoundConds &bc);
+  void setEnvironment(double t_amb_C, const std::string &src_path);
 
   void solve(double dt, double t_end_C);
 
@@ -56,6 +60,10 @@ public:
   void showWalls() const;
 
 private:
+  void setStartTemperature();
+  size_t calcEnvSize(const std::string &path);
+  void readEnvData(const std::string &path);
+  void giveMemEnv();
   void prepareInterp();
   void giveMemDF();
   void calcDF();

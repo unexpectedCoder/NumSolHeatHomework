@@ -6,7 +6,7 @@ using namespace std;
 
 // *** Wall ***
 Wall::Wall(double r1, double r2, size_t n, const std::string &material) :
-  dataSize(0), is_lambda(false), is_crho(false),
+  dataSize(0), is_lambda(false), is_crho(false), is_T(false),
   epsilon(1.0), rho(0.0), c(0.0), material(material)
 {
   if (r1 < 0.0 || fabs(r2 - r1) < EPS)
@@ -20,8 +20,12 @@ Wall::Wall(double r1, double r2, size_t n, const std::string &material) :
   step = (r2 - r1) / (N - 1);
 
   lambda_T = new double*[2];
-  T = new double*[2];
   crho = new double*[2];
+
+  // Especially selected T, since filled inside the vector
+  T = new double*[2];
+  for (size_t i = 0; i < 2; ++i)
+    T[i] = new double[N];
 }
 
 
@@ -39,22 +43,22 @@ Wall::Wall(const Wall &w)
   r2 = w.r2;
   step = w.step;
   dataSize = w.dataSize;
-  is_lambda = w.is_lambda;
   epsilon = w.epsilon;
   rho = w.rho;
   c = w.c;
   material = w.material;
 
+  is_lambda = w.is_lambda;
+  is_crho = w.is_crho;
+  is_T = w.is_T;
+
   lambda_T = new double*[2];
-  T = new double*[2];
   crho = new double*[2];
   for (size_t i = 0; i < 2; ++i)
   {
     lambda_T[i] = new double[dataSize];
-    T[i] = new double[N];
     crho[i] = new double[dataSize];
   }
-
   for (size_t i = 0; i < dataSize; ++i)
   {
     lambda_T[0][i] = w.lambda_T[0][i];
@@ -62,25 +66,34 @@ Wall::Wall(const Wall &w)
     crho[0][i] = w.crho[0][i];
     crho[1][i] = w.crho[1][i];
   }
-  for (size_t i = 0; i < N; ++i)
-  {
-    T[0][i] = w.T[0][i];
-    T[1][i] = w.T[1][i];
-  }
+
+  // Especially selected T, since filled inside the vector
+  T = new double*[2];
+  for (size_t i = 0; i < 2; ++i)
+    T[i] = new double[N];
+  if (is_T)
+    for (size_t i = 0; i < N; ++i)
+    {
+      T[0][i] = w.T[0][i];
+      T[1][i] = w.T[1][i];
+    }
 }
 
 
 Wall::~Wall()
 {
-  for (size_t i = 0; i < 2; ++i)
-  {
-    delete [] lambda_T[i];
-    delete [] T[i];
-    delete [] crho[i];
-  }
+  if (is_lambda)
+    for (size_t i = 0; i < 2; ++i)
+      delete [] lambda_T[i];
+  if (is_crho)
+    for (size_t i = 0; i < 2; ++i)
+      delete [] crho[i];
   delete [] lambda_T;
-  delete [] T;
   delete [] crho;
+
+  for (size_t i = 0; i < 2; ++i)
+    delete [] T[i];
+  delete [] T;
 }
 
 
@@ -99,19 +112,20 @@ Wall& Wall::operator=(const Wall &w)
   r2 = w.r2;
   step = w.step;
   dataSize = w.dataSize;
-  is_lambda = w.is_lambda;
   epsilon = w.epsilon;
   rho = w.rho;
   c = w.c;
   material = w.material;
 
+  is_lambda = w.is_lambda;
+  is_crho = w.is_crho;
+  is_T = w.is_T;
+
   lambda_T = new double*[2];
-  T = new double*[2];
   crho = new double*[2];
   for (size_t i = 0; i < 2; ++i)
   {
     lambda_T[i] = new double[dataSize];
-    T[i] = new double[N];
     crho[i] = new double[dataSize];
   }
 
@@ -122,11 +136,17 @@ Wall& Wall::operator=(const Wall &w)
     crho[0][i] = w.crho[0][i];
     crho[1][i] = w.crho[1][i];
   }
-  for (size_t i = 0; i < N; ++i)
-  {
-    T[0][i] = w.T[0][i];
-    T[1][i] = w.T[1][i];
-  }
+
+  // Especially selected T, since filled inside the vector
+  T = new double*[2];
+  for (size_t i = 0; i < 2; ++i)
+    T[i] = new double[N];
+  if (is_T)
+    for (size_t i = 0; i < N; ++i)
+    {
+      T[0][i] = w.T[0][i];
+      T[1][i] = w.T[1][i];
+    }
 
   return *this;
 }
@@ -143,7 +163,7 @@ void Wall::setLambda(const string& file_path)
     throw err.sendEx("lamba is already set!");
   is_lambda = true;
 
-  ifstream file(file_path.c_str(), ios_base::out);
+  ifstream file(file_path.c_str(), ios_base::in);
   if (!file.is_open())
     throw err.sendEx("file is not opened");
 
@@ -156,7 +176,7 @@ void Wall::setLambda(const string& file_path)
   dataSize--;
   file.close();
 
-  file.open(file_path.c_str(), ios_base::out);
+  file.open(file_path.c_str(), ios_base::in);
   for (size_t i = 0; i < 2; ++i)
     lambda_T[i] = new double[dataSize];
   for (size_t i = 0; i < dataSize; ++i)
@@ -217,21 +237,6 @@ void Wall::set_crho(const double *T, const double *c_rho, size_t n)
 }
 
 
-void Wall::setStartTemperature(double temp_C)
-{
-  if (temp_C + T_ABS < 0.0)
-    throw err.sendEx("invalid temperature (less than absolute 0)");
-
-  for (int i = 0; i < 2; ++i)
-    T[i] = new double[N];
-  for (size_t i = 0; i < N; ++i)
-  {
-    T[0][i] = step * i;
-    T[1][i] = temp_C + T_ABS;
-  }
-}
-
-
 void Wall::setBlackness(double epsilon)
 {
   if (epsilon < 0.0 || epsilon > 1.0)
@@ -254,3 +259,42 @@ void Wall::setSpecificHeat(double c)
     throw err.sendEx("specific heat must be greater than 0");
   this->c = c;
 }
+// *** END OF Wall ***
+
+
+// *** Environment ***
+Environment::~Environment()
+{
+  if (dataSize != 0)
+  {
+    delete [] T;
+    delete [] lambda;
+    delete [] a;
+    delete [] c;
+    delete [] rho;
+    delete [] nu;
+    delete [] mu;
+    delete [] Pr;
+  }
+}
+// *** END OF Environment ***
+
+
+// *** Start conds ***
+void StartConds::setGeometry(const Walls &ws, double h)
+{
+  size_t n = ws.size();
+  H = h;
+
+  if (n < 2)
+  {
+    D = 2.0 * ws[0].r2;
+    return;
+  }
+
+  for (size_t i = 0; i < n - 1; ++i)
+    if (fabs(ws[i + 1].r1 - ws[i].r2) > EPS)
+      throw err.sendEx("cylinder diameter is not equal to walls sizes");
+  D = 2.0 * ws[n - 1].r2;
+}
+// *** END OF Start conds ***
