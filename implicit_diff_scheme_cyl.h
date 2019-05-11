@@ -20,6 +20,8 @@ private:
         is_bound1, is_bound2,
         is_env;
 
+  size_t curTotalN;
+
   // For init
   Walls walls;                // Vector of walls
   size_t wallsN;              // Amount of walls
@@ -35,8 +37,9 @@ private:
 
   // For interpolation
   gsl_interp_accel *acc;
-  gsl_interp **lLam;          // 'l*' means 'linear'
-  gsl_interp **l_crho;
+  gsl_spline **lLam;          // 'l*' means 'linear'
+  gsl_spline **l_c;
+  // **-pointers are used for each wall
   double (*lInterp)(const gsl_interp*, const double*, const double*, double, gsl_interp_accel*);
 
   gsl_spline *sEnv_lam;       // 's*' means 'spline'
@@ -52,10 +55,9 @@ private:
   size_t t_ind;               // Current time layer index
 
   // Buffers
-  double Tl, T, Tr;           // Left, current and right temperature
+  double Tl, Tc, Tr;          // Left, current and right temperature
 
   // For the results
-  double Tw;                  // Current wall temperature
   std::vector<double> t_vec;  // Time vector
   std::vector<double> Tw_vec; // Wall temperature vector
 
@@ -84,7 +86,7 @@ private:
   void giveMemDF();
   void calcDF();
   void setStartDF(size_t i);
-  double calcTempCoeff(size_t i, char plus_minus);
+  double* calcTempCoeff(size_t wi, size_t i, bool is_joint);
 };
 
 

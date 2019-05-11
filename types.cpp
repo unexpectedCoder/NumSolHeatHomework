@@ -1,13 +1,16 @@
 #include "types.h"
 
+#include <iostream>
 
 using namespace std;
 
 
 // *** Wall ***
 Wall::Wall(double r1, double r2, size_t n, const std::string &material) :
-  dataSize(0), is_lambda(false), is_crho(false), is_T(false),
-  epsilon(1.0), rho(0.0), c(0.0), material(material)
+  dataSize(0),
+  is_lambda(false), is_T(false), is_rho(false),
+  is_c(false), is_r(false), is_T_table(false),
+  epsilon(1.0), material(material)
 {
   if (r1 < 0.0 || fabs(r2 - r1) < EPS)
     throw err.sendEx("r1 < 0 or r2 < r1");
@@ -19,13 +22,12 @@ Wall::Wall(double r1, double r2, size_t n, const std::string &material) :
   N = n + 1;
   step = (r2 - r1) / (N - 1);
 
-  lambda_T = new double*[2];
-  crho = new double*[2];
-
-  // Especially selected T, since filled inside the vector
-  T = new double*[2];
-  for (size_t i = 0; i < 2; ++i)
-    T[i] = new double[N];
+  r = new double[N];
+  for (size_t i = 0; i < N; ++i)
+    r[i] = step * i;
+  is_r = true;
+  // This array is used in vector, so memory is fully allocated here
+  T = new double[N];
 }
 
 
@@ -44,56 +46,46 @@ Wall::Wall(const Wall &w)
   step = w.step;
   dataSize = w.dataSize;
   epsilon = w.epsilon;
-  rho = w.rho;
-  c = w.c;
   material = w.material;
+  rho = w.rho;
 
   is_lambda = w.is_lambda;
-  is_crho = w.is_crho;
+  is_rho = w.is_rho;
+  is_c = w.is_c;
   is_T = w.is_T;
+  is_r = w.is_r;
 
-  lambda_T = new double*[2];
-  crho = new double*[2];
-  for (size_t i = 0; i < 2; ++i)
-  {
-    lambda_T[i] = new double[dataSize];
-    crho[i] = new double[dataSize];
-  }
+  T_table = new double[dataSize];
+  lambda = new double[dataSize];
+  c = new double[dataSize];
   for (size_t i = 0; i < dataSize; ++i)
   {
-    lambda_T[0][i] = w.lambda_T[0][i];
-    lambda_T[1][i] = w.lambda_T[1][i];
-    crho[0][i] = w.crho[0][i];
-    crho[1][i] = w.crho[1][i];
+    T_table[i] = w.T_table[i];
+    lambda[i] = w.lambda[i];
+    c[i] = w.c[i];
   }
 
-  // Especially selected T, since filled inside the vector
-  T = new double*[2];
-  for (size_t i = 0; i < 2; ++i)
-    T[i] = new double[N];
+  r = new double[N];
+  T = new double[N];
   if (is_T)
     for (size_t i = 0; i < N; ++i)
     {
-      T[0][i] = w.T[0][i];
-      T[1][i] = w.T[1][i];
+      r[i] = w.r[i];
+      T[i] = w.T[i];
     }
 }
 
 
 Wall::~Wall()
 {
-  if (is_lambda)
-    for (size_t i = 0; i < 2; ++i)
-      delete [] lambda_T[i];
-  if (is_crho)
-    for (size_t i = 0; i < 2; ++i)
-      delete [] crho[i];
-  delete [] lambda_T;
-  delete [] crho;
+  delete [] lambda;
+  delete [] c;
+  delete [] T_table;
 
-  for (size_t i = 0; i < 2; ++i)
-    delete [] T[i];
-  delete [] T;
+  if (is_r)
+    delete [] r;
+  if (is_T)
+    delete [] T;
 }
 
 
@@ -113,46 +105,39 @@ Wall& Wall::operator=(const Wall &w)
   step = w.step;
   dataSize = w.dataSize;
   epsilon = w.epsilon;
-  rho = w.rho;
-  c = w.c;
   material = w.material;
+  rho = w.rho;
 
   is_lambda = w.is_lambda;
-  is_crho = w.is_crho;
+  is_rho = w.is_rho;
+  is_c = w.is_c;
   is_T = w.is_T;
+  is_r = w.is_r;
 
-  lambda_T = new double*[2];
-  crho = new double*[2];
-  for (size_t i = 0; i < 2; ++i)
-  {
-    lambda_T[i] = new double[dataSize];
-    crho[i] = new double[dataSize];
-  }
-
+  T_table = new double[dataSize];
+  lambda = new double[dataSize];
+  c = new double[dataSize];
   for (size_t i = 0; i < dataSize; ++i)
   {
-    lambda_T[0][i] = w.lambda_T[0][i];
-    lambda_T[1][i] = w.lambda_T[1][i];
-    crho[0][i] = w.crho[0][i];
-    crho[1][i] = w.crho[1][i];
+    T_table[i] = w.T_table[i];
+    lambda[i] = w.lambda[i];
+    c[i] = w.c[i];
   }
 
-  // Especially selected T, since filled inside the vector
-  T = new double*[2];
-  for (size_t i = 0; i < 2; ++i)
-    T[i] = new double[N];
+  r = new double[N];
+  T = new double[N];
   if (is_T)
     for (size_t i = 0; i < N; ++i)
     {
-      T[0][i] = w.T[0][i];
-      T[1][i] = w.T[1][i];
+      r[i] = w.r[i];
+      T[i] = w.T[i];
     }
 
   return *this;
 }
 
 
-void Wall::setLambda(const string& file_path)
+void Wall::setLambdaT(const string& file_path)
 {
   /*
    * Read function lambda(T) from source file
@@ -171,24 +156,26 @@ void Wall::setLambda(const string& file_path)
   while (!file.eof())
   {
     file >> buf >> buf;
-    ++dataSize;
+    dataSize++;
   }
   dataSize--;
   file.close();
 
   file.open(file_path.c_str(), ios_base::in);
-  for (size_t i = 0; i < 2; ++i)
-    lambda_T[i] = new double[dataSize];
+  lambda = new double[dataSize];
+  T_table = new double[dataSize];
   for (size_t i = 0; i < dataSize; ++i)
   {
-    file >> lambda_T[0][i] >> lambda_T[1][i];
-    lambda_T[0][i] += T_ABS;
+    file >> T_table[i] >> lambda[i];
+    T_table[i] += T_ABS;
   }
   file.close();
+
+  is_T_table = true;
 }
 
 
-void Wall::setLambda(const double *T, const double *lam, size_t n)
+void Wall::setLambdaT(const double *T, const double *lam, size_t n)
 {
   /*
    * Set table **<var>[2][size] with T and lambda
@@ -205,35 +192,16 @@ void Wall::setLambda(const double *T, const double *lam, size_t n)
 
   if (dataSize == 0)
     dataSize = n;
-  for (size_t i = 0; i < 2; ++i)
-    lambda_T[i] = new double[dataSize];
+
+  lambda = new double[dataSize];
+  T_table = new double[dataSize];
   for (size_t i = 0; i < dataSize; ++i)
   {
-    lambda_T[0][i] = T[i];
-    lambda_T[1][i] = lam[i];
+    T_table[i] = T[i] + T_ABS;
+    lambda[i] = lam[i];
   }
-}
 
-
-void Wall::set_crho(const double *T, const double *c_rho, size_t n)
-{
-  if (dataSize != 0 && n != dataSize)
-    throw err.sendEx("set size != data size");
-  if (n < 2)
-    throw err.sendEx("arrays' size < 2");
-  if (is_crho)
-    throw err.sendEx("c*rho is already set");
-  is_crho = true;
-
-  if (dataSize == 0)
-    dataSize = n;
-  for (size_t i = 0; i < 2; ++i)
-    crho[i] = new double[dataSize];
-  for (size_t i = 0; i < dataSize; ++i)
-  {
-    crho[0][i] = T[i];
-    crho[1][i] = c_rho[i];
-  }
+  is_T_table = true;
 }
 
 
@@ -245,19 +213,27 @@ void Wall::setBlackness(double epsilon)
 }
 
 
-void Wall::setDens(double rho)
+void Wall::setDens(double rho_)
 {
-  if (rho < 0.0)
+  if (rho_ < 0.0)
     throw err.sendEx("density must be greater than 0");
-  this->rho = rho;
+  rho = rho_;
+  is_rho = true;
 }
 
 
-void Wall::setSpecificHeat(double c)
+void Wall::setSpecificHeat(double *c_, size_t n)
 {
-  if (c < 0.0)
-    throw err.sendEx("specific heat must be greater than 0");
-  this->c = c;
+  if (n != dataSize && dataSize != 0)
+    throw err.sendEx("size of c != size of data");
+  for (size_t i = 0; i < n; ++i)
+    if (c_[i] < 0.0)
+      throw err.sendEx("specific heat must be greater than 0");
+
+  c = new double[dataSize];
+  for (size_t i = 0; i < dataSize; ++i)
+    c[i] = c_[i];
+  is_c = true;
 }
 // *** END OF Wall ***
 

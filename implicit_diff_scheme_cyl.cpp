@@ -10,7 +10,7 @@ using namespace std;
 ImplicitDiffSchemeCyl::ImplicitDiffSchemeCyl() :
   is_walls(false), is_startConds(false),
   is_bound1(false), is_bound2(false), is_env(false),
-  wallsN(0), t_ind(0)
+  curTotalN(0), wallsN(0), t_ind(0)
 {
   lInterp = gsl_interp_eval;
   sInterp = gsl_spline_eval;
@@ -28,10 +28,9 @@ ImplicitDiffSchemeCyl::~ImplicitDiffSchemeCyl()
   delete [] b;
 
   // Clear interpolation
-  if (lLam)
-    for (size_t i = 0; i < wallsN; ++i)
-      gsl_interp_free(lLam[i]);
-  delete [] lLam;
+//  for (size_t i = 0; i < wallsN; ++i)
+//    gsl_spline_free(lLam[i]);
+//  delete [] lLam;
 
   gsl_spline_free(sEnv_c);
   gsl_spline_free(sEnv_Pr);
@@ -41,8 +40,7 @@ ImplicitDiffSchemeCyl::~ImplicitDiffSchemeCyl()
   gsl_spline_free(sEnv_rho);
   gsl_spline_free(sEnv_a);
 
-  if (acc)
-    gsl_interp_accel_free(acc);
+  gsl_interp_accel_free(acc);
 }
 
 
@@ -56,10 +54,14 @@ void ImplicitDiffSchemeCyl::addWall(const Wall &w)
 
 void ImplicitDiffSchemeCyl::setStartConds(const StartConds &sc)
 {
+  time = sc.time;
   H = sc.H;
   D = sc.D;
+
   T0 = sc.T0;
-  time = sc.time;
+  Tl = T0;
+  Tc = T0;
+  Tr = T0;
 
   Tw_vec.push_back(T0);
   t_vec.push_back(time);
@@ -131,10 +133,10 @@ void ImplicitDiffSchemeCyl::solve(double dt, double delta_T)
   double T_end = env.Ta + delta_T;
 
   acc = gsl_interp_accel_alloc();
+  giveMemDF();
   prepareLInterp();
   prepareSInterp();
-  giveMemDF();
-//  calcDF();
+  calcDF();
 }
 
 
@@ -162,8 +164,8 @@ void ImplicitDiffSchemeCyl::setStartTemperature()
 
     for (size_t i = 0; i < itr->N; ++i)
     {
-      itr->T[0][i] = itr->step * i;
-      itr->T[1][i] = T0;
+      itr->r[0] = itr->step * i;
+      itr->T[i] = T0;
     }
     itr->is_T = true;
   }
@@ -219,23 +221,25 @@ void ImplicitDiffSchemeCyl::readEnvData(const string &path)
 
 void ImplicitDiffSchemeCyl::prepareLInterp()
 {
-  // Using linear interpolation for materials
+  // Function uses linear interpolation for materials
   // because temperature changes in narrow interval
-  lLam = new gsl_interp*[wallsN];
-  l_crho = new gsl_interp*[wallsN];
+
+  lLam = new gsl_spline*[wallsN];
+  l_c = new gsl_spline*[wallsN];
   for (size_t i = 0; i < wallsN; ++i)
   {
-    // Lambda
-    lLam[i] = gsl_interp_alloc(gsl_interp_linear, walls[i].dataSize);
-    gsl_interp_init(lLam[i],
-                    walls[i].lambda_T[0], walls[i].lambda_T[1],
+    // lambda
+    lLam[i] = gsl_spline_alloc(gsl_interp_cspline, walls[i].dataSize);
+    gsl_spline_init(lLam[i],
+                    walls[i].T_table, walls[i].lambda,
                     walls[i].dataSize);
-    // c*rho
-    l_crho[i] = gsl_interp_alloc(gsl_interp_linear, walls[i].dataSize);
-    gsl_interp_init(l_crho[i],
-                    walls[i].crho[0], walls[i].crho[1],
+    // c
+    l_c[i] = gsl_spline_alloc(gsl_interp_cspline, walls[i].dataSize);
+    gsl_spline_init(l_c[i],
+                    walls[i].T_table, walls[i].c,
                     walls[i].dataSize);
   }
+  double a = 2;
 }
 
 
@@ -277,9 +281,15 @@ void ImplicitDiffSchemeCyl::giveMemDF()
 
 void ImplicitDiffSchemeCyl::calcDF()
 {
-  for (size_t i = 0; i < wallsN; ++i)
+  for (size_t wi = 0; wi < wallsN; ++wi)
   {
-    setStartDF(i);
+    setStartDF(wi);
+    for (size_t i = 1; i < walls[wi].N - 1; ++i)
+    {
+      double *buf = calcTempCoeff(wi, i, false);
+      double a1 = buf[0];
+      double a2 = buf[1];
+    }
   }
 }
 
@@ -302,11 +312,38 @@ void ImplicitDiffSchemeCyl::setStartDF(size_t i)
 }
 
 
-double ImplicitDiffSchemeCyl::calcTempCoeff(size_t i, char plus_minus)
+double* ImplicitDiffSchemeCyl::calcTempCoeff(size_t wi, size_t i, bool is_joint)
 {
-  if (plus_minus == '+')
-  {
-    return -1.0;
-  }
-  return -1.0;
+  if (is_joint && wi == wallsN - 1)
+    throw err.sendEx("the last wall doesn't have outer joint point");
+
+  double *res = new double[2];
+//  double theta_p = 0.5 * (walls[wi].T[i] + walls[wi].T[i + 1]);
+//  double theta_m = 0.5 * (walls[wi].T[i - 1] + walls[wi].T[i]);
+
+//  if (is_joint)
+//  {
+//    double c1 = lInterp(l_c[wi], walls[wi].T_table, walls[wi].c, walls[wi].T[i], acc);
+//    double c2 = lInterp(l_c[wi + 1], walls[wi + 1].T_table, walls[wi + 1].c, walls[wi + 1].T[0], acc);
+//    double rho1 = lInterp(l_rho[wi], walls[wi].T_table, walls[wi].rho, , acc);
+//    double rho2 = lInterp(l_rho[wi + 1], walls[wi + 1].T_table, walls[wi + 1].rho, , acc);
+//    double crho_ = (c1 * rho1 * walls[wi].step + c2 * rho2 * walls[wi + 1].step)
+//                   / (walls[wi].step + walls[wi + 1].step);
+
+//    double lam1 = lInterp(lLam[wi], walls[wi].T_table)
+//  }
+
+  double theta_p = 0.5 * (walls[wi].T[i] + walls[wi].T[i + 1]);
+  double theta_m = 0.5 * (walls[wi].T[i - 1] + walls[wi].T[i]);
+
+  double c = sInterp(l_c[wi], walls[wi].T[i], acc);
+  double rho = walls[wi].rho;
+
+  double lam1 = sInterp(lLam[wi], theta_p, acc);
+  double lam2 = sInterp(lLam[wi], theta_m, acc);
+
+  res[0] = lam1 / (c * rho);
+  res[1] = lam2 / (c * rho);
+
+  return res;
 }

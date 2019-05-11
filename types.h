@@ -35,16 +35,22 @@ struct Wall
   size_t N;               // Number of spacing segments
   double r1, r2;          // Inner and outer radius of cylinder
   double step;            // Space step
-  double **lambda_T;      // lambda(T) - wall's heat transfer coeff
+  double *T_table;        // Table temperature
+  double *lambda;         // lambda(T) - wall's heat transfer coeff
   size_t dataSize;        // Size of lambda data
+  double *T;              // T(r): [0][:] - coordinates, [1][:] - temperature
+  double *r;              // Coordinates
+  double rho;             // Material density (T)
+  double *c;              // Specific heat (T)
+
   bool is_lambda;         // Was the lambda(T) initialized
-  double **crho;          // c*rho of material
-  bool is_crho;           // Was the (c*rho)(T) initialized
-  double **T;             // T(tau): [0][:] - time, [1][:] - temperature
   bool is_T;              // Was the T(tau) initialized
+  bool is_rho;            // Was the rho(T) initialized
+  bool is_c;              // Was the c(T) initialized
+  bool is_r;              // Was the r initialized
+  bool is_T_table;        // Was the table temperature initialized
+
   double epsilon;         // Blackness
-  double rho;             // Material density
-  double c;               // Specific heat
   std::string material;   // Material's name
 
   Wall(double r1, double r2, size_t n, const std::string &material = "NONE");
@@ -53,12 +59,11 @@ struct Wall
 
   Wall& operator=(const Wall &w);
 
-  void setLambda(const std::string& file_path);
-  void setLambda(const double *T, const double *lam, size_t n);
-  void set_crho(const double *T, const double *crho, size_t n);
+  void setLambdaT(const std::string& file_path);
+  void setLambdaT(const double *T, const double *lam, size_t n);
   void setBlackness(double epsilon);
   void setDens(double rho);
-  void setSpecificHeat(double c);
+  void setSpecificHeat(double *c, size_t n);
 
   inline friend std::ostream& operator<<(std::ostream &os, const Wall &w);
 };
@@ -72,24 +77,33 @@ std::ostream& operator<<(std::ostream &os, const Wall &w)
      << "\tr1, m: " << w.r1 << '\n'
      << "\tr2, m: " << w.r2 << '\n'
      << "\tstep (dr), m: " << w.step << '\n'
-     << "\trho, kg/m^3: " << w.rho << '\n'
-     << "\tc, J/(kg*K): " << w.c << '\n'
-     << "\tepsilon: " << w.epsilon << '\n';
+     << "\tepsilon: " << w.epsilon << '\n'
+     << "\trho, kg/m^3: " << w.rho << '\n';
 
-  os << "\tlambda(T):\n"
-     << "\t\tT, C\tlambda, W/(m*K)\n";
-  for (size_t i = 0; i < w.dataSize; ++i)
-    os << "\t#" << i + 1 << ".\t"
-       << w.lambda_T[0][i] - T_ABS << '\t'
-       << w.lambda_T[1][i] << '\n';
+  if (w.is_c)
+  {
+    os << "\tt, C\tc\n";
+    for (size_t i = 0; i < w.dataSize; ++i)
+      os << '#' << i + 1 << ".\t"
+         << w.T_table[i] - T_ABS << '\t' << w.c[i] << '\n';
+  }
+
+  if (w.is_T_table)
+  {
+    os << "\tlambda(T):\n"
+       << "\t\tT, C\tlambda, W/(m*K)\n";
+    for (size_t i = 0; i < w.dataSize; ++i)
+      os << "\t#" << i + 1 << ".\t"
+         << w.T_table[i] - T_ABS << '\t' << w.lambda[i] << '\n';
+  }
 
   if (w.is_T)
   {
     os << "\tT(r):\n\tr, m\tT, C\n";
-    if (w.T)
-      for (size_t i = 0; i < w.N; ++i)
-        if (w.T[i])
-          os << '\t' << w.T[0][i] << '\t' << w.T[1][i] - T_ABS << '\n';
+    for (size_t i = 0; i < w.N; ++i)
+      if (w.T[i])
+        os << '#' << i + 1 << ".\t"
+           << w.r[i] << '\t' << w.T[i] - T_ABS << '\n';
   }
 
   os << '\n';
