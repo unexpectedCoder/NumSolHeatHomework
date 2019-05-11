@@ -14,10 +14,16 @@ class ImplicitDiffSchemeCyl
 private:
   Error err;
 
+  // Flags that solver is ready to solve
+  bool  is_walls,
+        is_startConds,
+        is_bound1, is_bound2,
+        is_env;
+
   // For init
   Walls walls;                // Vector of walls
   size_t wallsN;              // Amount of walls
-  BoundConds bound1, bound2;  // Left & right boundary conditions
+  BoundCond bound1, bound2;   // Left & right boundary conditions
   Environment env;            // Environment data
   double H, D;                // Outer geometry
   double T0;                  // Start temperature
@@ -50,8 +56,8 @@ public:
 
   void addWall(const Wall &w);
   void setStartConds(const StartConds &sc);
-  void setFirstBound(const BoundConds &bc);
-  void setSecondBound(const BoundConds &bc);
+  void setFirstBound(const BoundCond &bc);
+  void setSecondBound(const BoundCond &bc);
   void setEnvironment(double t_amb_C, const std::string &src_path);
 
   void solve(double dt, double t_end_C);

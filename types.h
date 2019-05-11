@@ -83,11 +83,14 @@ std::ostream& operator<<(std::ostream &os, const Wall &w)
        << w.lambda_T[0][i] - T_ABS << '\t'
        << w.lambda_T[1][i] << '\n';
 
-  os << "\tT(r):\n\tr, m\tT, C\n";
-  if (w.T)
-    for (size_t i = 0; i < w.N; ++i)
-      if (w.T[i])
-        os << '\t' << w.T[0][i] << '\t' << w.T[1][i] - T_ABS << '\n';
+  if (w.is_T)
+  {
+    os << "\tT(r):\n\tr, m\tT, C\n";
+    if (w.T)
+      for (size_t i = 0; i < w.N; ++i)
+        if (w.T[i])
+          os << '\t' << w.T[0][i] << '\t' << w.T[1][i] - T_ABS << '\n';
+  }
 
   os << '\n';
   return os;
@@ -144,13 +147,25 @@ std::ostream& operator<<(std::ostream &os, const Environment &e)
 
 
 // *** Boundary conditions (type 2) ***
-struct BoundConds
+struct BoundCond
 {
   int type;             // Type of boundary conditions:
   double q;             // for type 2 (heat flow to wall)
   double T_amb, alpha;  // for type 3 (ambient T and heat emission coeff)
 
-  BoundConds() : type(0), q(0.0), T_amb(0.0), alpha(0.0) {}
+  BoundCond() : type(0), q(0.0), T_amb(0.0), alpha(0.0) {}
+
+  void setType2(double q)
+  {
+    type = 2;
+    this->q = q;
+  }
+  void setType3(double t_amb_C, double alpha = 0.0)
+  {
+    type = 3;
+    T_amb = t_amb_C + T_ABS;
+    this->alpha = alpha;
+  }
 };
 // *** END OF boundary conditions ***
 

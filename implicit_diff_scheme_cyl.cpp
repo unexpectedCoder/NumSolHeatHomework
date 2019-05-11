@@ -8,6 +8,8 @@ using namespace std;
 
 
 ImplicitDiffSchemeCyl::ImplicitDiffSchemeCyl() :
+  is_walls(false), is_startConds(false),
+  is_bound1(false), is_bound2(false), is_env(false),
   wallsN(0), t_ind(0)
 {
   interp_f = gsl_interp_eval;
@@ -30,6 +32,7 @@ void ImplicitDiffSchemeCyl::addWall(const Wall &w)
 {
   walls.push_back(w);
   wallsN++;
+  is_walls = true;
 }
 
 
@@ -44,22 +47,26 @@ void ImplicitDiffSchemeCyl::setStartConds(const StartConds &sc)
   t_vec.push_back(time);
 
   setStartTemperature();
+
+  is_startConds = true;
 }
 
 
-void ImplicitDiffSchemeCyl::setFirstBound(const BoundConds &bc)
+void ImplicitDiffSchemeCyl::setFirstBound(const BoundCond &bc)
 {
   if (bc.type != 2)
     throw err.sendEx("this condition type is not supported for the first bound");
   bound1 = bc;
+  is_bound1 = true;
 }
 
 
-void ImplicitDiffSchemeCyl::setSecondBound(const BoundConds &bc)
+void ImplicitDiffSchemeCyl::setSecondBound(const BoundCond &bc)
 {
   if (bc.type != 3)
     throw err.sendEx("this condition type is not supported for the first bound");
   bound2 = bc;
+  is_bound2 = true;
 }
 
 
@@ -78,12 +85,26 @@ void ImplicitDiffSchemeCyl::setEnvironment(double t_amb_C, const string &src_pat
   giveMemEnv();
   readEnvData(src_path);
 
+  is_env = true;
+
   cout << env << '\n';
 }
 
 
 void ImplicitDiffSchemeCyl::solve(double dt, double delta_T)
 {
+  // Flags checking
+  if (!is_env)
+    throw err.sendEx("environment is not initialized");
+  if (!is_walls)
+    throw err.sendEx("walls are not initialized");
+  if (!is_bound1)
+    throw err.sendEx("first boundary condition is not initialized");
+  if (!is_bound2)
+    throw err.sendEx("second boundary condition is not initialized");
+  if (!is_startConds)
+    throw err.sendEx("start conditions are not initialized");
+  // Input checking
   if (delta_T < 0.0)
     throw err.sendEx("temperature is set less than ambient temperature");
   if (dt < 0.0)

@@ -41,12 +41,26 @@ int main(int argc, char *argv[])
     StartConds sc(t0);
     sc.setGeometry(walls, H);
 
+    BoundCond bc1, bc2;
+    bc1.setType2(0.0);
+    bc2.setType3(ta);
+
     // Solution
     ImplicitDiffSchemeCyl solver;
+    // ...set walls
     solver.addWall(wall);
+    // ...for init control
+    solver.showWalls();
+    // ...set bounds
+    solver.setFirstBound(bc1);
+    solver.setSecondBound(bc2);
+    // ...set start conditions and environment
     solver.setStartConds(sc);
     solver.setEnvironment(ta, "../NumSolHeatHomework/env_data.txt");
+
     solver.solve(dt, delta_t);
+
+    // ...for init control
     solver.showWalls();
   }
   catch (const string& ex)
