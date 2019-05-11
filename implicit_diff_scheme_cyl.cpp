@@ -28,9 +28,13 @@ ImplicitDiffSchemeCyl::~ImplicitDiffSchemeCyl()
   delete [] b;
 
   // Clear interpolation
-//  for (size_t i = 0; i < wallsN; ++i)
-//    gsl_spline_free(lLam[i]);
-//  delete [] lLam;
+  for (size_t i = 0; i < wallsN; ++i)
+  {
+    gsl_spline_free(lLam[i]);
+    gsl_spline_free(l_c[i]);
+  }
+  delete [] lLam;
+  delete [] l_c;
 
   gsl_spline_free(sEnv_c);
   gsl_spline_free(sEnv_Pr);
@@ -239,7 +243,6 @@ void ImplicitDiffSchemeCyl::prepareLInterp()
                     walls[i].T_table, walls[i].c,
                     walls[i].dataSize);
   }
-  double a = 2;
 }
 
 
