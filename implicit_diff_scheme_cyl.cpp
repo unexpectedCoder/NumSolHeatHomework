@@ -12,7 +12,8 @@ ImplicitDiffSchemeCyl::ImplicitDiffSchemeCyl() :
   is_bound1(false), is_bound2(false), is_env(false),
   wallsN(0), t_ind(0)
 {
-  interp_f = gsl_interp_eval;
+  lInterp = gsl_interp_eval;
+  sInterp = gsl_spline_eval;
 }
 
 
@@ -25,6 +26,23 @@ ImplicitDiffSchemeCyl::~ImplicitDiffSchemeCyl()
   }
   delete [] a;
   delete [] b;
+
+  // Clear interpolation
+  if (lLam)
+    for (size_t i = 0; i < wallsN; ++i)
+      gsl_interp_free(lLam[i]);
+  delete [] lLam;
+
+  gsl_spline_free(sEnv_c);
+  gsl_spline_free(sEnv_Pr);
+  gsl_spline_free(sEnv_mu);
+  gsl_spline_free(sEnv_nu);
+  gsl_spline_free(sEnv_lam);
+  gsl_spline_free(sEnv_rho);
+  gsl_spline_free(sEnv_a);
+
+  if (acc)
+    gsl_interp_accel_free(acc);
 }
 
 
@@ -112,8 +130,11 @@ void ImplicitDiffSchemeCyl::solve(double dt, double delta_T)
 
   double T_end = env.Ta + delta_T;
 
-  prepareInterp();
+  acc = gsl_interp_accel_alloc();
+  prepareLInterp();
+  prepareSInterp();
   giveMemDF();
+//  calcDF();
 }
 
 
@@ -196,10 +217,8 @@ void ImplicitDiffSchemeCyl::readEnvData(const string &path)
 }
 
 
-void ImplicitDiffSchemeCyl::prepareInterp()
+void ImplicitDiffSchemeCyl::prepareLInterp()
 {
-  acc = gsl_interp_accel_alloc();
-
   // Using linear interpolation for materials
   // because temperature changes in narrow interval
   lLam = new gsl_interp*[wallsN];
@@ -217,6 +236,26 @@ void ImplicitDiffSchemeCyl::prepareInterp()
                     walls[i].crho[0], walls[i].crho[1],
                     walls[i].dataSize);
   }
+}
+
+
+void ImplicitDiffSchemeCyl::prepareSInterp()
+{
+  sEnv_c = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
+  sEnv_Pr = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
+  sEnv_mu = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
+  sEnv_nu = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
+  sEnv_lam = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
+  sEnv_rho = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
+  sEnv_a = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
+
+  gsl_spline_init(sEnv_c, env.T, env.c, env.dataSize);
+  gsl_spline_init(sEnv_Pr, env.T, env.Pr, env.dataSize);
+  gsl_spline_init(sEnv_mu, env.T, env.mu, env.dataSize);
+  gsl_spline_init(sEnv_nu, env.T, env.nu, env.dataSize);
+  gsl_spline_init(sEnv_lam, env.T, env.lambda, env.dataSize);
+  gsl_spline_init(sEnv_rho, env.T, env.rho, env.dataSize);
+  gsl_spline_init(sEnv_a, env.T, env.a, env.dataSize);
 }
 
 
@@ -270,16 +309,4 @@ double ImplicitDiffSchemeCyl::calcTempCoeff(size_t i, char plus_minus)
     return -1.0;
   }
   return -1.0;
-}
-
-
-void ImplicitDiffSchemeCyl::freeInterp()
-{
-  if (lLam)
-    for (size_t i = 0; i < wallsN; ++i)
-      gsl_interp_free(lLam[i]);
-  delete [] lLam;
-
-  if (acc)
-    gsl_interp_accel_free(acc);
 }

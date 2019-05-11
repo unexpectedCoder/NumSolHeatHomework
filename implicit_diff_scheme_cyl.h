@@ -37,7 +37,16 @@ private:
   gsl_interp_accel *acc;
   gsl_interp **lLam;          // 'l*' means 'linear'
   gsl_interp **l_crho;
-  double (*interp_f)(const gsl_interp*, const double*, const double*, double, gsl_interp_accel*);
+  double (*lInterp)(const gsl_interp*, const double*, const double*, double, gsl_interp_accel*);
+
+  gsl_spline *sEnv_lam;       // 's*' means 'spline'
+  gsl_spline *sEnv_rho;
+  gsl_spline *sEnv_c;
+  gsl_spline *sEnv_a;
+  gsl_spline *sEnv_nu;
+  gsl_spline *sEnv_mu;
+  gsl_spline *sEnv_Pr;
+  double (*sInterp)(const gsl_spline*, double, gsl_interp_accel*);
   // .................
 
   size_t t_ind;               // Current time layer index
@@ -70,12 +79,12 @@ private:
   size_t calcEnvSize(const std::string &path);
   void readEnvData(const std::string &path);
   void giveMemEnv();
-  void prepareInterp();
+  void prepareLInterp();
+  void prepareSInterp();
   void giveMemDF();
   void calcDF();
   void setStartDF(size_t i);
   double calcTempCoeff(size_t i, char plus_minus);
-  void freeInterp();
 };
 
 
