@@ -53,8 +53,8 @@ int main(int argc, char *argv[])
 
     Walls walls;
     walls.push_back(wall);
-//    walls.push_back(wall2);
-//    walls.push_back(wall3);
+    walls.push_back(wall2);
+    walls.push_back(wall3);
 
     StartConds sc(t0);
     sc.setGeometry(walls, H);

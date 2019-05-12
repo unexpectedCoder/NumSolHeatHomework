@@ -38,7 +38,6 @@ private:
   gsl_spline **lLam;          // 'l*' means 'linear'
   gsl_spline **l_c;
   // **-pointers are used for each wall
-  double (*lInterp)(const gsl_interp*, const double*, const double*, double, gsl_interp_accel*);
 
   gsl_spline *sEnv_lam;       // 's*' means 'spline'
   gsl_spline *sEnv_rho;
@@ -47,14 +46,18 @@ private:
   gsl_spline *sEnv_nu;
   gsl_spline *sEnv_mu;
   gsl_spline *sEnv_Pr;
-  double (*sInterp)(const gsl_spline*, double, gsl_interp_accel*);
-  // .................
 
-  size_t t_ind;               // Current time layer index
-  double alphaS;
+  // Pointer to spline interpolation function
+  double (*sInterp)(const gsl_spline*, double, gsl_interp_accel*);
+  // .............................................................
+
+  // Others
+  size_t t_ind;   // Current time layer index
+  double alphaS;  // Summary heat emission coeff
+  double *r;      // Common coordinates
 
   // For the results
-  std::vector<double> t_vec;                // Time vector
+  std::vector<double> time_vec;             // Time vector
   std::vector<std::vector<double> > theta;  // Wall inner temperature field
   std::vector<double> theta_buf;            // 1D vector for the adding to 2D theta vector
   std::vector<double> Tw_vec;               // Wall outer temperature vector
@@ -76,6 +79,7 @@ public:
 
 private:
   void setStartTemperature();
+  void setCommonCoords();
   size_t calcEnvSize(const std::string &path);
   void readEnvData(const std::string &path);
   void giveMemEnv();
@@ -83,10 +87,14 @@ private:
   void prepareSInterp();
   void giveMemDF();
   void calcDF(double dt);
+  void calcJointDF(double dt, size_t wi, size_t i);
+  void calcInnerDF(double dt, size_t wi, size_t i);
   void setStartDF();
-  double* calcTempCoeffs(size_t wi, size_t i, bool is_joint);
+  double* calcTempCoeffs(size_t wi, size_t i);
+  double calcJointTempCoeff(size_t wi, size_t i);
   void calcTemperature();
   void calcAlphaSum(double th);
+  void writeResults(const std::string &path);
 };
 
 

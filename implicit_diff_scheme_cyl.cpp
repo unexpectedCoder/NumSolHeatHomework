@@ -12,7 +12,6 @@ ImplicitDiffSchemeCyl::ImplicitDiffSchemeCyl() :
   is_bound1(false), is_bound2(false), is_env(false),
   totalN(0), wallsN(0), t_ind(0), alphaS(0.0)
 {
-  lInterp = gsl_interp_eval;
   sInterp = gsl_spline_eval;
 }
 
@@ -40,6 +39,8 @@ ImplicitDiffSchemeCyl::~ImplicitDiffSchemeCyl()
   gsl_spline_free(sEnv_a);
 
   gsl_interp_accel_free(acc);
+
+//  delete [] r;
 }
 
 
@@ -51,7 +52,7 @@ void ImplicitDiffSchemeCyl::setWalls(const Walls &ws)
     wallsN++;
     totalN += i->N;
   }
-  totalN--;
+  totalN -= wallsN - 1;
   is_walls = true;
 }
 
@@ -65,7 +66,7 @@ void ImplicitDiffSchemeCyl::setStartConds(const StartConds &sc)
   T0 = sc.T0;
 
   Tw_vec.push_back(T0);
-  t_vec.push_back(time);
+  time_vec.push_back(time);
 
   setStartTemperature();
 
@@ -111,9 +112,12 @@ void ImplicitDiffSchemeCyl::setEnvironment(double t_amb_C, const string &src_pat
   cout << env << '\n';
 }
 
-
 void ImplicitDiffSchemeCyl::solve(double dt, double delta_T)
 {
+  /*
+   * This is the main solver's function.
+  */
+
   // Flags checking
   if (!is_env)
     throw err.sendEx("environment is not initialized");
@@ -131,17 +135,22 @@ void ImplicitDiffSchemeCyl::solve(double dt, double delta_T)
   if (dt < 0.0)
     throw err.sendEx("time step must be > 0");
 
-  double T_end = env.Ta + delta_T;
-
-  cout << "N_total = " << totalN << '\n';
-
   acc = gsl_interp_accel_alloc();
+  setCommonCoords();
   giveMemDF();
   prepareLInterp();
   prepareSInterp();
-  calcDF(dt);
 
-  // TODO: make offsets for DF
+  double T_end = env.Ta + delta_T;
+  while (*(Tw_vec.end() - 1) > T_end)
+  {
+    calcDF(dt);
+    calcTemperature();
+
+    time += dt;
+    time_vec.push_back(time);
+    t_ind++;
+  }
 }
 
 
@@ -178,6 +187,25 @@ void ImplicitDiffSchemeCyl::setStartTemperature()
       itr->T[i] = T0;
     itr->is_T = true;
   }
+}
+
+
+void ImplicitDiffSchemeCyl::setCommonCoords()
+{
+  r = new double[totalN];
+
+  size_t k = 0;
+  for (size_t i = 0; i < wallsN; ++i)
+    for (size_t j = (i == 0) ? 0 : 1; j < walls[i].N; ++j)
+    {
+      r[k] = walls[i].r[j];
+      k++;
+    }
+
+  cout << "N_total: " << totalN << '\n';
+  cout << "r[i]:\n";
+  for (size_t i = 0; i < totalN; ++i)
+    cout << i + 1 << ") " << r[i] << '\n';
 }
 
 
@@ -222,6 +250,7 @@ void ImplicitDiffSchemeCyl::readEnvData(const string &path)
       >> env.rho[i] >> env.c[i]
       >> env.a[i] >> env.nu[i]
       >> env.mu[i] >> env.Pr[i];
+    env.T[i] += T_ABS;
   }
 
   f.close();
@@ -284,54 +313,25 @@ void ImplicitDiffSchemeCyl::calcDF(double dt)
 {
   setStartDF();
 
-  size_t offset = 0;
   size_t wi = 0;
   size_t n = walls[wi].N - 1;
 
   for (size_t i = 1; i < totalN - 1; ++i)
   {
-    if (i == n)
+    if (i == n && wi != wallsN - 1)           // Joint case condition
     {
-      /* Joint case */
-
-//      if (wi != wallsN - 1)
-//      {
-          // TODO: calculate joint DF
-//      }
-
-      offset += walls[wi].N - 1;
       n += walls[wi + 1].N - 1;
+      calcJointDF(dt, wi, i);
       wi++;
-
       continue;
     }
-
-    double *buf = calcTempCoeffs(wi, i - offset, false);
-    double a1 = buf[0];
-    double a2 = buf[1];
-
-    A[i] = a1 * dt * (1.0 + 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
-    B[i] = a2 * dt * (1.0 - 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
-
-    a[i] = A[i] / (1.0 + A[i] + B[i] * (1.0 - a[i - 1]));
-    b[i] = theta[t_ind][i] / A[i]
-           + B[i] / A[i] * a[i - 1] * b[i - 1];
+    calcInnerDF(dt, wi, i);
   }
 }
 
 
 void ImplicitDiffSchemeCyl::setStartDF()
 {
-//  if (i > 0)
-//  {
-//    a[i][0] = a[i - 1][walls[i - 1].N - 1];
-//    b[i][0] = b[i - 1][walls[i - 1].N - 1];
-//    A[i][0] = A[i - 1][walls[i - 1].N - 1];
-//    B[i][0] = B[i - 1][walls[i - 1].N - 1];
-//    return;
-//  }
-
-  // i == 0
   if (fabs(bound1.q - 0.0) < EPS)
   {
     a[0] = 1.0;
@@ -344,30 +344,65 @@ void ImplicitDiffSchemeCyl::setStartDF()
 }
 
 
-double* ImplicitDiffSchemeCyl::calcTempCoeffs(size_t wi, size_t i, bool is_joint)
+void ImplicitDiffSchemeCyl::calcJointDF(double dt, size_t wi, size_t i)
 {
-  if (is_joint && wi == wallsN - 1)
-    throw err.sendEx("the last wall doesn't have outer joint point");
+  double _a = calcJointTempCoeff(wi, i);
 
+  A[i] = _a * dt * (1.0 + 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+  B[i] = _a * dt * (1.0 - 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+
+  a[i] = A[i] / (1.0 + A[i] + B[i] * (1.0 - a[i - 1]));
+  b[i] = theta_buf[i] / A[i]
+         + B[i] / A[i] * a[i - 1] * b[i - 1];
+}
+
+
+double ImplicitDiffSchemeCyl::calcJointTempCoeff(size_t wi, size_t i)
+{
+  if (wi == wallsN - 1)
+    throw err.sendEx("the last wall doesn't have outer joint");
+
+  double c1 = sInterp(l_c[wi], theta_buf[i], acc);
+  double c2 = sInterp(l_c[wi + 1], theta_buf[i + 1], acc);
+  double rho1 = walls[wi].rho;
+  double rho2 = walls[wi + 1].rho;
+  double crho_ = (c1 * rho1 * walls[wi].step + c2 * rho2 * walls[wi + 1].step)
+                 / (walls[wi].step + walls[wi + 1].step);
+
+  double lam1 = sInterp(lLam[wi], theta_buf[i], acc);
+  double lam2 = sInterp(lLam[wi + 1], theta_buf[i + 1], acc);
+  double lam_ = 0.5 * (lam1 + lam2);
+
+  return lam_ / crho_;
+}
+
+
+void ImplicitDiffSchemeCyl::calcInnerDF(double dt, size_t wi, size_t i)
+{
+  double *buf = calcTempCoeffs(wi, i);
+  double a1 = buf[0];
+  double a2 = buf[1];
+
+  A[i] = a1 * dt * (1.0 + 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+  B[i] = a2 * dt * (1.0 - 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+
+//  A[i] = a1 * dt * (walls[i]. + 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+//  B[i] = a2 * dt * (1.0 - 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+
+  a[i] = A[i] / (1.0 + A[i] + B[i] * (1.0 - a[i - 1]));
+  b[i] = theta[t_ind][i] / A[i]
+         + B[i] / A[i] * a[i - 1] * b[i - 1];
+}
+
+
+double* ImplicitDiffSchemeCyl::calcTempCoeffs(size_t wi, size_t i)
+{
   double *res = new double[2];
-  double theta_p = 0.5 * (walls[wi].T[i] + walls[wi].T[i + 1]);
-  double theta_m = 0.5 * (walls[wi].T[i - 1] + walls[wi].T[i]);
+  double theta_p = 0.5 * (theta_buf[i] + theta_buf[i + 1]);
+  double theta_m = 0.5 * (theta_buf[i - 1] + theta_buf[i]);
 
-//  if (is_joint)
-//  {
-//    double c1 = lInterp(l_c[wi], walls[wi].T_table, walls[wi].c, walls[wi].T[i], acc);
-//    double c2 = lInterp(l_c[wi + 1], walls[wi + 1].T_table, walls[wi + 1].c, walls[wi + 1].T[0], acc);
-//    double rho1 = lInterp(l_rho[wi], walls[wi].T_table, walls[wi].rho, , acc);
-//    double rho2 = lInterp(l_rho[wi + 1], walls[wi + 1].T_table, walls[wi + 1].rho, , acc);
-//    double crho_ = (c1 * rho1 * walls[wi].step + c2 * rho2 * walls[wi + 1].step)
-//                   / (walls[wi].step + walls[wi + 1].step);
-
-//    double lam1 = lInterp(lLam[wi], walls[wi].T_table)
-//  }
-
-  double c = sInterp(l_c[wi], walls[wi].T[i], acc);
+  double c = sInterp(l_c[wi], theta_buf[i], acc);
   double rho = walls[wi].rho;
-
   double lam1 = sInterp(lLam[wi], theta_p, acc);
   double lam2 = sInterp(lLam[wi], theta_m, acc);
 
@@ -380,13 +415,26 @@ double* ImplicitDiffSchemeCyl::calcTempCoeffs(size_t wi, size_t i, bool is_joint
 
 void ImplicitDiffSchemeCyl::calcTemperature()
 {
-  calcAlphaSum(theta[t_ind][totalN - 1]);
-  for (size_t wi = wallsN - 1; wi + 1 >= 1; --wi)
+  calcAlphaSum(theta_buf[totalN - 1]);
+
+  double c1 = env.Ta * alphaS * walls[wallsN - 1].step
+              / (sInterp(lLam[wallsN - 1], theta[t_ind][totalN - 1], acc));
+  double c2 = a[totalN - 1] * b[totalN - 1];
+  double c3 = 1.0 - a[totalN - 1];
+  double c4 = alphaS * walls[wallsN - 1].step
+              / sInterp(lLam[wallsN - 1], theta[t_ind][totalN - 1], acc);
+
+  size_t i = totalN - 2;
+  theta_buf[totalN - 1] = (c1 + c2) / (c3 + c4);
+  while (i + 1 > 0)
   {
-    double c1 = env.Ta * alphaS * walls[wi].step
-                / (sInterp(lLam[wi], theta[t_ind][totalN - 1], acc));
-//    double c2 = a[wi][totalN]
+    theta_buf[i] = a[i] * (b[i] + theta_buf[i + 1]);
+    i--;
   }
+
+  // Writing results
+  theta.push_back(theta_buf);
+  Tw_vec.push_back(theta_buf[totalN - 1]);
 }
 
 
@@ -402,4 +450,12 @@ void ImplicitDiffSchemeCyl::calcAlphaSum(double th)
   double al_r = q_r / (th - env.Ta);
 
   alphaS = al_c + al_r;
+}
+
+
+void ImplicitDiffSchemeCyl::writeResults(const std::string &path)
+{
+  fstream f(path.c_str(), ios_base::out);
+  if (!f.is_open())
+    throw err.sendEx("resulting file is not opened");
 }

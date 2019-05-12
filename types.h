@@ -149,7 +149,7 @@ std::ostream& operator<<(std::ostream &os, const Environment &e)
   os << "\t..... ENVIRONMENT .....\n";
   os << "\tt, C\t\tlambda\t\trho\t\tcp\t\ta\t\tnu\t\tmu\t\tPr\n";
   for (size_t i = 0; i < e.dataSize; ++i)
-    os << '\t' << e.T[i]
+    os << '\t' << e.T[i] - T_ABS
        << "\t\t" << e.lambda[i]
        << "\t\t" << e.rho[i]
        << "\t\t" << e.c[i]
