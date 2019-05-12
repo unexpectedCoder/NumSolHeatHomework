@@ -292,34 +292,30 @@ void ImplicitDiffSchemeCyl::calcDF(double dt)
   {
     if (i == n)
     {
-      // Joint place
+      /* Joint case */
 
-      cout << "i = " << i << '\n';
-      cout << "n = " << n << '\n';
-      cout << "offset = " << offset << "\n\n";
+//      if (wi != wallsN - 1)
+//      {
+          // TODO: calculate joint DF
+//      }
 
-      if (wi != wallsN - 1)
-      {
-//        TODO: calculate joint DF
-      }
-
-      offset += walls[wi].N - wi;
+      offset += walls[wi].N - 1;
       n += walls[wi + 1].N - 1;
       wi++;
 
       continue;
     }
 
-//    double *buf = calcTempCoeff(wi, i - (offset - 1), false);
-//    double a1 = buf[0];
-//    double a2 = buf[1];
+    double *buf = calcTempCoeffs(wi, i - offset, false);
+    double a1 = buf[0];
+    double a2 = buf[1];
 
-//    A[i] = a1 * dt * (1.0 + 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
-//    B[i] = a2 * dt * (1.0 - 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+    A[i] = a1 * dt * (1.0 + 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+    B[i] = a2 * dt * (1.0 - 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
 
-//    a[i] = A[i] / (1.0 + A[i] + B[i] * (1.0 - a[i - 1]));
-//    b[i] = theta[t_ind][i] / A[i]
-//           + B[i] / A[i] * a[i - 1] * b[i - 1];
+    a[i] = A[i] / (1.0 + A[i] + B[i] * (1.0 - a[i - 1]));
+    b[i] = theta[t_ind][i] / A[i]
+           + B[i] / A[i] * a[i - 1] * b[i - 1];
   }
 }
 
@@ -348,7 +344,7 @@ void ImplicitDiffSchemeCyl::setStartDF()
 }
 
 
-double* ImplicitDiffSchemeCyl::calcTempCoeff(size_t wi, size_t i, bool is_joint)
+double* ImplicitDiffSchemeCyl::calcTempCoeffs(size_t wi, size_t i, bool is_joint)
 {
   if (is_joint && wi == wallsN - 1)
     throw err.sendEx("the last wall doesn't have outer joint point");
@@ -372,7 +368,6 @@ double* ImplicitDiffSchemeCyl::calcTempCoeff(size_t wi, size_t i, bool is_joint)
   double c = sInterp(l_c[wi], walls[wi].T[i], acc);
   double rho = walls[wi].rho;
 
-  cout << theta_p << '\n' /*<< theta_m << '\n'*/;
   double lam1 = sInterp(lLam[wi], theta_p, acc);
   double lam2 = sInterp(lLam[wi], theta_m, acc);
 

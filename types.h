@@ -106,9 +106,8 @@ std::ostream& operator<<(std::ostream &os, const Wall &w)
   {
     os << "\tT(r):\n\tr, m\tT, C\n";
     for (size_t i = 0; i < w.N; ++i)
-      if (w.T[i])
-        os << '#' << i + 1 << ".\t"
-           << w.r[i] << '\t' << w.T[i] - T_ABS << '\n';
+      os << '#' << i + 1 << ".\t"
+         << w.r[i] << '\t' << w.T[i] - T_ABS << '\n';
   }
 
   os << '\n';

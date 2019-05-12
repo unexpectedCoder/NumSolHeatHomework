@@ -84,7 +84,7 @@ private:
   void giveMemDF();
   void calcDF(double dt);
   void setStartDF();
-  double* calcTempCoeff(size_t wi, size_t i, bool is_joint);
+  double* calcTempCoeffs(size_t wi, size_t i, bool is_joint);
   void calcTemperature();
   void calcAlphaSum(double th);
 };
