@@ -36,8 +36,22 @@ int main(int argc, char *argv[])
     wall.setBlackness(epsilon);
     wall.setSpecificHeat(c, n1);
 
+    Wall wall2(0.1, 0.2, 20, "steel");
+    wall2.setLambdaT(T_table, lam, n1);
+    wall2.setDens(rho);
+    wall2.setBlackness(epsilon);
+    wall2.setSpecificHeat(c, n1);
+
+    Wall wall3(0.2, 0.25, 10, "steel");
+    wall3.setLambdaT(T_table, lam, n1);
+    wall3.setDens(rho);
+    wall3.setBlackness(epsilon);
+    wall3.setSpecificHeat(c, n1);
+
     Walls walls;
     walls.push_back(wall);
+    walls.push_back(wall2);
+    walls.push_back(wall3);
 
     StartConds sc(t0);
     sc.setGeometry(walls, H);
@@ -49,7 +63,7 @@ int main(int argc, char *argv[])
     // Solution
     ImplicitDiffSchemeCyl solver;
     // ...set walls
-    solver.addWall(wall);
+    solver.setWalls(walls);
     // ...for init control
     solver.showWalls();
     // ...set bounds

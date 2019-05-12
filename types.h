@@ -10,6 +10,10 @@
 #define T_ABS 273.15    // Absolute difference between C and K
 
 
+const double g = 9.80665;
+const double C = 5.67;
+
+
 struct Error
 {
   std::string mess = "";

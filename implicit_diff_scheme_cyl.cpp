@@ -10,7 +10,7 @@ using namespace std;
 ImplicitDiffSchemeCyl::ImplicitDiffSchemeCyl() :
   is_walls(false), is_startConds(false),
   is_bound1(false), is_bound2(false), is_env(false),
-  curTotalN(0), wallsN(0), t_ind(0)
+  totalN(0), wallsN(0), t_ind(0), alphaS(0.0)
 {
   lInterp = gsl_interp_eval;
   sInterp = gsl_spline_eval;
@@ -19,11 +19,6 @@ ImplicitDiffSchemeCyl::ImplicitDiffSchemeCyl() :
 
 ImplicitDiffSchemeCyl::~ImplicitDiffSchemeCyl()
 {
-  for (size_t i = 0; i < wallsN; ++i)
-  {
-    delete [] a[i];
-    delete [] b[i];
-  }
   delete [] a;
   delete [] b;
 
@@ -48,10 +43,24 @@ ImplicitDiffSchemeCyl::~ImplicitDiffSchemeCyl()
 }
 
 
-void ImplicitDiffSchemeCyl::addWall(const Wall &w)
+//void ImplicitDiffSchemeCyl::addWall(const Wall &w)
+//{
+//  walls.push_back(w);
+//  totalN += w.N - 1;
+//  wallsN++;
+//  is_walls = true;
+//}
+
+
+void ImplicitDiffSchemeCyl::setWalls(const Walls &ws)
 {
-  walls.push_back(w);
-  wallsN++;
+  for (WallCItr i = ws.begin(); i != ws.end(); ++i)
+  {
+    walls.push_back(*i);
+    wallsN++;
+    totalN += i->N;
+  }
+  totalN--;
   is_walls = true;
 }
 
@@ -63,9 +72,6 @@ void ImplicitDiffSchemeCyl::setStartConds(const StartConds &sc)
   D = sc.D;
 
   T0 = sc.T0;
-  Tl = T0;
-  Tc = T0;
-  Tr = T0;
 
   Tw_vec.push_back(T0);
   t_vec.push_back(time);
@@ -136,11 +142,15 @@ void ImplicitDiffSchemeCyl::solve(double dt, double delta_T)
 
   double T_end = env.Ta + delta_T;
 
+  cout << "N_total = " << totalN << '\n';
+
   acc = gsl_interp_accel_alloc();
   giveMemDF();
   prepareLInterp();
   prepareSInterp();
-  calcDF();
+//  calcDF(dt);
+
+  // TODO: make offsets for DF
 }
 
 
@@ -158,8 +168,15 @@ void ImplicitDiffSchemeCyl::showWalls() const
 // *** PRIVATE ***
 void ImplicitDiffSchemeCyl::setStartTemperature()
 {
+  // Start temperature destribution
+
   if (T0 < 0.0)
     throw err.sendEx("invalid temperature (less than absolute 0)");
+
+  theta_buf.resize(totalN);
+  for (size_t i = 0; i < totalN; ++i)
+    theta_buf[i] = T0;
+  theta.push_back(theta_buf);
 
   for (WallItr itr = walls.begin(); itr != walls.end(); ++itr)
   {
@@ -268,47 +285,67 @@ void ImplicitDiffSchemeCyl::prepareSInterp()
 
 void ImplicitDiffSchemeCyl::giveMemDF()
 {
-  a = new double*[wallsN];
-  A = new double*[wallsN];
-  b = new double*[wallsN];
-  B = new double*[wallsN];
-  for (size_t i = 0; i < wallsN; ++i)
-  {
-    a[i] = new double[walls[i].N];
-    A[i] = new double[walls[i].N];
-    b[i] = new double[walls[i].N];
-    B[i] = new double[walls[i].N];
-  }
+  a = new double[totalN];
+  A = new double[totalN];
+  b = new double[totalN];
+  B = new double[totalN];
 }
 
 
-void ImplicitDiffSchemeCyl::calcDF()
+void ImplicitDiffSchemeCyl::calcDF(double dt)
 {
-  for (size_t wi = 0; wi < wallsN; ++wi)
+  setStartDF();
+
+  size_t offset = 0;
+  size_t wi = 0;
+  size_t n = walls[0].N;
+
+  for (size_t i = 1; i < totalN - 1; ++i)
   {
-    setStartDF(wi);
-    for (size_t i = 1; i < walls[wi].N - 1; ++i)
+    if (i == n)
     {
-      double *buf = calcTempCoeff(wi, i, false);
-      double a1 = buf[0];
-      double a2 = buf[1];
+      cout << "i = " << i << '\n';
+      // TODO: calculate joint DF
+
+      n += offset;
+      offset += walls[wi].N - wi;
+      wi++;
+
+      continue;
     }
+
+    double *buf = calcTempCoeff(wi, i - (offset - 1), false);
+    double a1 = buf[0];
+    double a2 = buf[1];
+
+    A[i] = a1 * dt * (1.0 + 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+    B[i] = a2 * dt * (1.0 - 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+
+    a[i] = A[i] / (1.0 + A[i] + B[i] * (1.0 - a[i - 1]));
+    b[i] = theta[t_ind][i] / A[i]
+           + B[i] / A[i] * a[i - 1] * b[i - 1];
   }
 }
 
 
-void ImplicitDiffSchemeCyl::setStartDF(size_t i)
+void ImplicitDiffSchemeCyl::setStartDF()
 {
-  if (i > 0)
+//  if (i > 0)
+//  {
+//    a[i][0] = a[i - 1][walls[i - 1].N - 1];
+//    b[i][0] = b[i - 1][walls[i - 1].N - 1];
+//    A[i][0] = A[i - 1][walls[i - 1].N - 1];
+//    B[i][0] = B[i - 1][walls[i - 1].N - 1];
+//    return;
+//  }
+
+  // i == 0
+  if (fabs(bound1.q - 0.0) < EPS)
   {
-    a[i][0] = a[i - 1][walls[i - 1].N - 1];
-    b[i][0] = b[i - 1][walls[i - 1].N - 1];
-    return;
-  }
-  if (fabs(bound1.q - 0.0) < EPS)           // i == 0
-  {
-    a[0][0] = 1.0;
-    b[0][0] = 0.0;
+    a[0] = 1.0;
+    b[0] = 0.0;
+    A[0] = 0.0;
+    B[0] = 0.0;
     return;
   }
   throw err.sendEx("program is not ready for this shit yet");
@@ -349,4 +386,31 @@ double* ImplicitDiffSchemeCyl::calcTempCoeff(size_t wi, size_t i, bool is_joint)
   res[1] = lam2 / (c * rho);
 
   return res;
+}
+
+
+void ImplicitDiffSchemeCyl::calcTemperature()
+{
+  calcAlphaSum(theta[t_ind][totalN - 1]);
+  for (size_t wi = wallsN - 1; wi + 1 >= 1; --wi)
+  {
+    double c1 = env.Ta * alphaS * walls[wi].step
+                / (sInterp(lLam[wi], theta[t_ind][totalN - 1], acc));
+//    double c2 = a[wi][totalN]
+  }
+}
+
+
+void ImplicitDiffSchemeCyl::calcAlphaSum(double th)
+{
+  double T = 0.5 * (th + env.Ta);
+  double Gr = g * (th - env.Ta) / (T + env.Ta) * pow(H, 3.0)
+              / pow(sInterp(sEnv_nu, T, acc), 2.0);
+  double Nu = 0.55 * pow(Gr * sInterp(sEnv_Pr, T, acc), 0.25);
+  double al_c = sInterp(sEnv_lam, T, acc) * Nu / H;
+  double q_r = C * walls[wallsN - 1].epsilon
+               * (pow(th / 100.0, 4.0) - pow(env.Ta / 100.0, 4.0));
+  double al_r = q_r / (th - env.Ta);
+
+  alphaS = al_c + al_r;
 }

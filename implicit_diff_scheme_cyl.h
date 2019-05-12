@@ -1,8 +1,6 @@
 #ifndef IMPLICIT_DIFF_SCHEME_CYL_H
 #define IMPLICIT_DIFF_SCHEME_CYL_H
 
-#include <vector>
-
 #include <gsl/gsl_interp.h>
 #include <gsl/gsl_spline.h>
 
@@ -20,7 +18,7 @@ private:
         is_bound1, is_bound2,
         is_env;
 
-  size_t curTotalN;
+  size_t totalN;
 
   // For init
   Walls walls;                // Vector of walls
@@ -32,8 +30,8 @@ private:
   double time;                // Current time
 
   // Driving factors (DF)
-  double **a, **A;
-  double **b, **B;
+  double *a, *A;
+  double *b, *B;
 
   // For interpolation
   gsl_interp_accel *acc;
@@ -53,19 +51,20 @@ private:
   // .................
 
   size_t t_ind;               // Current time layer index
-
-  // Buffers
-  double Tl, Tc, Tr;          // Left, current and right temperature
+  double alphaS;
 
   // For the results
-  std::vector<double> t_vec;  // Time vector
-  std::vector<double> Tw_vec; // Wall temperature vector
+  std::vector<double> t_vec;                // Time vector
+  std::vector<std::vector<double> > theta;  // Wall inner temperature field
+  std::vector<double> theta_buf;            // 1D vector for the adding to 2D theta vector
+  std::vector<double> Tw_vec;               // Wall outer temperature vector
 
 public:
   ImplicitDiffSchemeCyl();
   ~ImplicitDiffSchemeCyl();
 
-  void addWall(const Wall &w);
+//  void addWall(const Wall &w);
+  void setWalls(const Walls &ws);
   void setStartConds(const StartConds &sc);
   void setFirstBound(const BoundCond &bc);
   void setSecondBound(const BoundCond &bc);
@@ -84,9 +83,11 @@ private:
   void prepareLInterp();
   void prepareSInterp();
   void giveMemDF();
-  void calcDF();
-  void setStartDF(size_t i);
+  void calcDF(double dt);
+  void setStartDF();
   double* calcTempCoeff(size_t wi, size_t i, bool is_joint);
+  void calcTemperature();
+  void calcAlphaSum(double th);
 };
 
 
