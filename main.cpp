@@ -1,9 +1,11 @@
-//#include <QApplication>
+#include <QApplication>
 
 #include <iostream>
 #include <string>
 
 #include "implicit_diff_scheme_cyl.h"
+#include "plotter.h"
+#include "mainwindow.h"
 
 
 using namespace std;
@@ -41,14 +43,14 @@ int main(int argc, char *argv[])
     wall.setBlackness(epsilon);
     wall.setSpecificHeat(c, n1);
 
-    Wall wall2(0.1, 0.2, 20, "steel");
+    Wall wall2(D2 / 2.0, D2, 400, "steel");
     wall2.setGrid();
     wall2.setLambdaT(T_table, lam, n1);
     wall2.setDens(rho);
     wall2.setBlackness(epsilon);
     wall2.setSpecificHeat(c, n1);
 
-    Wall wall3(0.2, 0.25, 10, "steel");
+    Wall wall3(D2, D2 + 0.1 * D2, 200, "steel");
     wall3.setGrid();
     wall3.setLambdaT(T_table, lam, n1);
     wall3.setDens(rho);
@@ -57,8 +59,8 @@ int main(int argc, char *argv[])
 
     Walls walls;
     walls.push_back(wall);
-//    walls.push_back(wall2);
-//    walls.push_back(wall3);
+    walls.push_back(wall2);
+    walls.push_back(wall3);
 
     StartConds sc(t0);
     sc.setGeometry(walls, H);
@@ -90,7 +92,19 @@ int main(int argc, char *argv[])
     cout << ex;
   }
 
-  return 0;
-//  QApplication a(argc, argv);
-//  return a.exec();
+  // Graphic part
+  QApplication a(argc, argv);
+
+  Plotter plot;
+  plot.setData("../NumSolHeatHomework/results.txt", true);
+  plot.createChart(QString("Температура стенки тормоза отката"));
+//  plot.setAxis(0, 3200, 50, 200, 11, 11);
+  plot.setAxis();
+
+  MainWindow w;
+  w.setCentralWidget(plot.getChartView());
+  w.resize(1200, 800);
+  w.show();
+
+  return a.exec();
 }

@@ -209,11 +209,6 @@ void ImplicitDiffSchemeCyl::setCommonCoords()
       r[k] = walls[i].r[j];
       k++;
     }
-
-//  cout << "N_total: " << totalN << '\n';
-//  cout << "r[i]:\n";
-//  for (size_t i = 0; i < totalN; ++i)
-//    cout << i + 1 << ") " << r[i] << '\n';
 }
 
 
@@ -432,22 +427,11 @@ void ImplicitDiffSchemeCyl::calcTemperature()
   double c3 = 1.0 - a[totalN - 2];
   double c4 = alphaS * walls[wallsN - 1].step / lam;
 
-//  cout << "Interp_main: " << lInterp(lLam[wallsN - 1], theta_buf[totalN - 1], lAcc) << '\n';
-
-  cout << "theta_N = " << theta_buf[totalN - 1] << "\n";
-  cout << "c1 = " << c1 << "\n";
-  cout << "c2 = " << c2 << "\n";
-  cout << "c3 = " << c3 << "\n";
-  cout << "c4 = " << c4 << "\n";
-
-  cout << endl << (c1 + c2) / (c3 + c4) << endl;
-
   size_t i = totalN - 2;
   theta_buf[totalN - 1] = (c1 + c2) / (c3 + c4);
   while (i + 1 > 0)
   {
     theta_buf[i] = a[i] * (b[i] + theta_buf[i + 1]);
-//    cout << "theta = " << theta_buf[i] << '\n';
     i--;
   }
 

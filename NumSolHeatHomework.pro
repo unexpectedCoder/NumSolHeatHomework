@@ -4,7 +4,7 @@
 #
 #-------------------------------------------------
 
-QT       += core gui
+QT       += core gui charts
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -22,18 +22,23 @@ DEFINES += QT_DEPRECATED_WARNINGS
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
-CONFIG += console c++11     # Delete 'console'
-CONFIG -= app_bundle        # Delete for using Qt libraries
-CONFIG -= qt                # .............................
+CONFIG += c++11     # Delete 'console'
+#CONFIG -= app_bundle        # Delete for using Qt libraries
+#CONFIG -= qt                # .............................
 
 SOURCES += \
         main.cpp \
     types.cpp \
-    implicit_diff_scheme_cyl.cpp
+    implicit_diff_scheme_cyl.cpp \
+    plotter.cpp \
+    mainwindow.cpp
 
 HEADERS += \
     types.h \
-    implicit_diff_scheme_cyl.h
+    implicit_diff_scheme_cyl.h \
+    plotter.h \
+    err.h \
+    mainwindow.h
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
@@ -48,3 +53,6 @@ DEPENDPATH += $$PWD/../../../../usr/local/include
 
 unix:!macx: PRE_TARGETDEPS += $$PWD/../../../../usr/local/lib/libgsl.a
 unix:!macx: PRE_TARGETDEPS += $$PWD/../../../../usr/local/lib/libgslcblas.a
+
+FORMS += \
+    mainwindow.ui
