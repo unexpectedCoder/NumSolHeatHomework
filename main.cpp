@@ -97,9 +97,9 @@ int main(int argc, char *argv[])
 
   Plotter plot;
   plot.setData("../NumSolHeatHomework/results.txt", true);
-  plot.createChart(QString("Температура стенки тормоза отката"));
-//  plot.setAxis(0, 3200, 50, 200, 11, 11);
-  plot.setAxis();
+  plot.createChart();
+  plot.setAxis(0, 7000, 50, 200, 11, 11);
+//  plot.setAxis();
 
   MainWindow w;
   w.setCentralWidget(plot.getChartView());

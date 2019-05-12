@@ -95,10 +95,12 @@ void Plotter::setAxis(double x_min, double x_max,
   axisX->setMin(x_min);
   axisX->setMax(x_max);
   axisX->setTickCount(x_ticks);
+  axisX->setTitleText("Время, сек");
 
   axisY->setMin(y_min);
   axisY->setMax(y_max);
   axisY->setTickCount(y_ticks);
+  axisY->setTitleText("Температура стенки, градусы Цельсия");
 
   chart->addAxis(axisX, Qt::AlignBottom);
   chart->addAxis(axisY, Qt::AlignLeft);
