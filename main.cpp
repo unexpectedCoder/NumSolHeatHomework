@@ -15,12 +15,16 @@ int main(int argc, char *argv[])
     const size_t n1 = 3;
 
     // Initialization
+    size_t N = 300;         // Number of grid segments
     double dt = 20.0;       // seconds
     double t0 = 174.0;      // Cel degrees
-    double ta = 20.0;       // ...........
-    double delta_t = 5.0;
+    double ta = 22.2;       // ...........
+    double t_end = 50.0;    // Termination condition
+    double delta_t = t_end - ta;
     double epsilon = 0.95;  // Blackness
-    double H = 0.2;
+    double H = 0.25;        // Cyl heigh
+    double D1 = 0.0;        // Inner cyl diameter
+    double D2 = 0.0299;     // Outer cyl diameter
     // For material
     double T_table[] = { 0.0, 100.0, 200.0 };
     double lam[] = { 106.0, 109.0, 110.0 };
@@ -29,7 +33,7 @@ int main(int argc, char *argv[])
     for (size_t i = 0; i < n1; ++i)
       c[i] /= rho;
 
-    Wall wall(0.0, 0.1, 10, "steel");
+    Wall wall(D1 / 2.0, D2 / 2.0, N, "steel");
 //    wall.setLambda("../NumSolHeatHomework/lambda(T).txt");
     wall.setGrid();
     wall.setLambdaT(T_table, lam, n1);
@@ -53,8 +57,8 @@ int main(int argc, char *argv[])
 
     Walls walls;
     walls.push_back(wall);
-    walls.push_back(wall2);
-    walls.push_back(wall3);
+//    walls.push_back(wall2);
+//    walls.push_back(wall3);
 
     StartConds sc(t0);
     sc.setGeometry(walls, H);

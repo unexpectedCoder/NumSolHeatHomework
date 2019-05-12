@@ -12,6 +12,10 @@ ImplicitDiffSchemeCyl::ImplicitDiffSchemeCyl() :
   is_bound1(false), is_bound2(false), is_env(false),
   totalN(0), wallsN(0), t_ind(0), alphaS(0.0)
 {
+  lAcc = gsl_interp_accel_alloc();
+  sAcc = gsl_interp_accel_alloc();
+
+  lInterp = gsl_spline_eval;
   sInterp = gsl_spline_eval;
 }
 
@@ -38,9 +42,10 @@ ImplicitDiffSchemeCyl::~ImplicitDiffSchemeCyl()
   gsl_spline_free(sEnv_rho);
   gsl_spline_free(sEnv_a);
 
-  gsl_interp_accel_free(acc);
+  gsl_interp_accel_free(lAcc);
+  gsl_interp_accel_free(sAcc);
 
-//  delete [] r;
+  delete [] r;
 }
 
 
@@ -135,11 +140,12 @@ void ImplicitDiffSchemeCyl::solve(double dt, double delta_T)
   if (dt < 0.0)
     throw err.sendEx("time step must be > 0");
 
-  acc = gsl_interp_accel_alloc();
   setCommonCoords();
   giveMemDF();
   prepareLInterp();
   prepareSInterp();
+
+//  cout << "Interp: " << theta_buf[totalN - 1] << '\t' << sInterp(lLam[wallsN - 1], theta_buf[totalN - 1], acc) << '\n';
 
   double T_end = env.Ta + delta_T;
   while (*(Tw_vec.end() - 1) > T_end)
@@ -151,6 +157,8 @@ void ImplicitDiffSchemeCyl::solve(double dt, double delta_T)
     time_vec.push_back(time);
     t_ind++;
   }
+
+  writeResultsFile(RES_PATH);
 }
 
 
@@ -202,10 +210,10 @@ void ImplicitDiffSchemeCyl::setCommonCoords()
       k++;
     }
 
-  cout << "N_total: " << totalN << '\n';
-  cout << "r[i]:\n";
-  for (size_t i = 0; i < totalN; ++i)
-    cout << i + 1 << ") " << r[i] << '\n';
+//  cout << "N_total: " << totalN << '\n';
+//  cout << "r[i]:\n";
+//  for (size_t i = 0; i < totalN; ++i)
+//    cout << i + 1 << ") " << r[i] << '\n';
 }
 
 
@@ -267,12 +275,12 @@ void ImplicitDiffSchemeCyl::prepareLInterp()
   for (size_t i = 0; i < wallsN; ++i)
   {
     // lambda
-    lLam[i] = gsl_spline_alloc(gsl_interp_cspline, walls[i].dataSize);
+    lLam[i] = gsl_spline_alloc(gsl_interp_linear, walls[i].dataSize);
     gsl_spline_init(lLam[i],
                     walls[i].T_table, walls[i].lambda,
                     walls[i].dataSize);
     // c
-    l_c[i] = gsl_spline_alloc(gsl_interp_cspline, walls[i].dataSize);
+    l_c[i] = gsl_spline_alloc(gsl_interp_linear, walls[i].dataSize);
     gsl_spline_init(l_c[i],
                     walls[i].T_table, walls[i].c,
                     walls[i].dataSize);
@@ -282,13 +290,13 @@ void ImplicitDiffSchemeCyl::prepareLInterp()
 
 void ImplicitDiffSchemeCyl::prepareSInterp()
 {
-  sEnv_c = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
-  sEnv_Pr = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
-  sEnv_mu = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
-  sEnv_nu = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
-  sEnv_lam = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
-  sEnv_rho = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
-  sEnv_a = gsl_spline_alloc(gsl_interp_cspline, env.dataSize);
+  sEnv_c = gsl_spline_alloc(gsl_interp_akima, env.dataSize);
+  sEnv_Pr = gsl_spline_alloc(gsl_interp_akima, env.dataSize);
+  sEnv_mu = gsl_spline_alloc(gsl_interp_akima, env.dataSize);
+  sEnv_nu = gsl_spline_alloc(gsl_interp_akima, env.dataSize);
+  sEnv_lam = gsl_spline_alloc(gsl_interp_akima, env.dataSize);
+  sEnv_rho = gsl_spline_alloc(gsl_interp_akima, env.dataSize);
+  sEnv_a = gsl_spline_alloc(gsl_interp_akima, env.dataSize);
 
   gsl_spline_init(sEnv_c, env.T, env.c, env.dataSize);
   gsl_spline_init(sEnv_Pr, env.T, env.Pr, env.dataSize);
@@ -348,8 +356,8 @@ void ImplicitDiffSchemeCyl::calcJointDF(double dt, size_t wi, size_t i)
 {
   double _a = calcJointTempCoeff(wi, i);
 
-  A[i] = _a * dt * (1.0 + 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
-  B[i] = _a * dt * (1.0 - 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+  A[i] = _a * dt * (r[i] + r[i + 1]) / (r[i] * (r[i + 1] - r[i]) * (r[i + 1] - r[i - 1]));
+  B[i] = _a * dt * (r[i] + r[i - 1]) / (r[i] * (r[i] - r[i - 1]) * (r[i + 1] - r[i - 1]));
 
   a[i] = A[i] / (1.0 + A[i] + B[i] * (1.0 - a[i - 1]));
   b[i] = theta_buf[i] / A[i]
@@ -362,15 +370,16 @@ double ImplicitDiffSchemeCyl::calcJointTempCoeff(size_t wi, size_t i)
   if (wi == wallsN - 1)
     throw err.sendEx("the last wall doesn't have outer joint");
 
-  double c1 = sInterp(l_c[wi], theta_buf[i], acc);
-  double c2 = sInterp(l_c[wi + 1], theta_buf[i + 1], acc);
+  double c1 = lInterp(l_c[wi], theta_buf[i], lAcc);
+  double c2 = lInterp(l_c[wi + 1], theta_buf[i + 1], lAcc);
+
   double rho1 = walls[wi].rho;
   double rho2 = walls[wi + 1].rho;
   double crho_ = (c1 * rho1 * walls[wi].step + c2 * rho2 * walls[wi + 1].step)
                  / (walls[wi].step + walls[wi + 1].step);
 
-  double lam1 = sInterp(lLam[wi], theta_buf[i], acc);
-  double lam2 = sInterp(lLam[wi + 1], theta_buf[i + 1], acc);
+  double lam1 = lInterp(lLam[wi], theta_buf[i], lAcc);
+  double lam2 = lInterp(lLam[wi + 1], theta_buf[i + 1], lAcc);
   double lam_ = 0.5 * (lam1 + lam2);
 
   return lam_ / crho_;
@@ -383,15 +392,13 @@ void ImplicitDiffSchemeCyl::calcInnerDF(double dt, size_t wi, size_t i)
   double a1 = buf[0];
   double a2 = buf[1];
 
-  A[i] = a1 * dt * (1.0 + 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
-  B[i] = a2 * dt * (1.0 - 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
-
-//  A[i] = a1 * dt * (walls[i]. + 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
-//  B[i] = a2 * dt * (1.0 - 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+  A[i] = a1 * dt * (r[i] + r[i + 1])
+         / (r[i] * (r[i + 1] - r[i]) * (r[i + 1] - r[i - 1]));
+  B[i] = a2 * dt * (r[i] + r[i - 1])
+        / (r[i] * (r[i] - r[i - 1]) * (r[i + 1] - r[i - 1]));
 
   a[i] = A[i] / (1.0 + A[i] + B[i] * (1.0 - a[i - 1]));
-  b[i] = theta[t_ind][i] / A[i]
-         + B[i] / A[i] * a[i - 1] * b[i - 1];
+  b[i] = theta_buf[i] / A[i] + B[i] / A[i] * a[i - 1] * b[i - 1];
 }
 
 
@@ -401,10 +408,10 @@ double* ImplicitDiffSchemeCyl::calcTempCoeffs(size_t wi, size_t i)
   double theta_p = 0.5 * (theta_buf[i] + theta_buf[i + 1]);
   double theta_m = 0.5 * (theta_buf[i - 1] + theta_buf[i]);
 
-  double c = sInterp(l_c[wi], theta_buf[i], acc);
+  double c = sInterp(l_c[wi], theta_buf[i], lAcc);
   double rho = walls[wi].rho;
-  double lam1 = sInterp(lLam[wi], theta_p, acc);
-  double lam2 = sInterp(lLam[wi], theta_m, acc);
+  double lam1 = sInterp(lLam[wi], theta_p, lAcc);
+  double lam2 = sInterp(lLam[wi], theta_m, lAcc);
 
   res[0] = lam1 / (c * rho);
   res[1] = lam2 / (c * rho);
@@ -415,20 +422,32 @@ double* ImplicitDiffSchemeCyl::calcTempCoeffs(size_t wi, size_t i)
 
 void ImplicitDiffSchemeCyl::calcTemperature()
 {
+
+  double lam = lInterp(lLam[wallsN - 1], theta_buf[totalN - 1], lAcc);
+
   calcAlphaSum(theta_buf[totalN - 1]);
 
-  double c1 = env.Ta * alphaS * walls[wallsN - 1].step
-              / (sInterp(lLam[wallsN - 1], theta[t_ind][totalN - 1], acc));
-  double c2 = a[totalN - 1] * b[totalN - 1];
-  double c3 = 1.0 - a[totalN - 1];
-  double c4 = alphaS * walls[wallsN - 1].step
-              / sInterp(lLam[wallsN - 1], theta[t_ind][totalN - 1], acc);
+  double c1 = env.Ta * alphaS * walls[wallsN - 1].step / lam;
+  double c2 = a[totalN - 2] * b[totalN - 2];
+  double c3 = 1.0 - a[totalN - 2];
+  double c4 = alphaS * walls[wallsN - 1].step / lam;
+
+//  cout << "Interp_main: " << lInterp(lLam[wallsN - 1], theta_buf[totalN - 1], lAcc) << '\n';
+
+  cout << "theta_N = " << theta_buf[totalN - 1] << "\n";
+  cout << "c1 = " << c1 << "\n";
+  cout << "c2 = " << c2 << "\n";
+  cout << "c3 = " << c3 << "\n";
+  cout << "c4 = " << c4 << "\n";
+
+  cout << endl << (c1 + c2) / (c3 + c4) << endl;
 
   size_t i = totalN - 2;
   theta_buf[totalN - 1] = (c1 + c2) / (c3 + c4);
   while (i + 1 > 0)
   {
     theta_buf[i] = a[i] * (b[i] + theta_buf[i + 1]);
+//    cout << "theta = " << theta_buf[i] << '\n';
     i--;
   }
 
@@ -441,10 +460,10 @@ void ImplicitDiffSchemeCyl::calcTemperature()
 void ImplicitDiffSchemeCyl::calcAlphaSum(double th)
 {
   double T = 0.5 * (th + env.Ta);
-  double Gr = g * (th - env.Ta) / (T + env.Ta) * pow(H, 3.0)
-              / pow(sInterp(sEnv_nu, T, acc), 2.0);
-  double Nu = 0.55 * pow(Gr * sInterp(sEnv_Pr, T, acc), 0.25);
-  double al_c = sInterp(sEnv_lam, T, acc) * Nu / H;
+  double Gr = g * (th - env.Ta) / T * pow(H, 3.0)
+              / pow(sInterp(sEnv_nu, T, sAcc), 2.0);
+  double Nu = 0.55 * pow(Gr * sInterp(sEnv_Pr, T, sAcc), 0.25);
+  double al_c = sInterp(sEnv_lam, T, sAcc) * Nu / H;
   double q_r = C * walls[wallsN - 1].epsilon
                * (pow(th / 100.0, 4.0) - pow(env.Ta / 100.0, 4.0));
   double al_r = q_r / (th - env.Ta);
@@ -453,9 +472,17 @@ void ImplicitDiffSchemeCyl::calcAlphaSum(double th)
 }
 
 
-void ImplicitDiffSchemeCyl::writeResults(const std::string &path)
+void ImplicitDiffSchemeCyl::writeResultsFile(const std::string &path)
 {
   fstream f(path.c_str(), ios_base::out);
   if (!f.is_open())
     throw err.sendEx("resulting file is not opened");
+  if (Tw_vec.size() != time_vec.size())
+    throw err.sendEx("size of temperature != size of time");
+
+  f << "t, sec\tT, C\n";
+  for (size_t i = 0; i < Tw_vec.size(); ++i)
+    f << time_vec[i] << '\t' << Tw_vec[i] - T_ABS << '\n';
+
+  f.close();
 }

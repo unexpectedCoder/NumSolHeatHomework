@@ -6,6 +6,8 @@
 
 #include "types.h"
 
+#define RES_PATH "../NumSolHeatHomework/results.txt"
+
 
 class ImplicitDiffSchemeCyl
 {
@@ -34,11 +36,14 @@ private:
   double *b, *B;
 
   // For interpolation
-  gsl_interp_accel *acc;
+  gsl_interp_accel *lAcc;
   gsl_spline **lLam;          // 'l*' means 'linear'
   gsl_spline **l_c;
+
+  double (*lInterp)(const gsl_spline*, double, gsl_interp_accel*);
   // **-pointers are used for each wall
 
+  gsl_interp_accel *sAcc;
   gsl_spline *sEnv_lam;       // 's*' means 'spline'
   gsl_spline *sEnv_rho;
   gsl_spline *sEnv_c;
@@ -94,7 +99,7 @@ private:
   double calcJointTempCoeff(size_t wi, size_t i);
   void calcTemperature();
   void calcAlphaSum(double th);
-  void writeResults(const std::string &path);
+  void writeResultsFile(const std::string &path);
 };
 
 
