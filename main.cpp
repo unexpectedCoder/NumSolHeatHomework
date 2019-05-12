@@ -31,18 +31,21 @@ int main(int argc, char *argv[])
 
     Wall wall(0.0, 0.1, 10, "steel");
 //    wall.setLambda("../NumSolHeatHomework/lambda(T).txt");
+    wall.setGrid();
     wall.setLambdaT(T_table, lam, n1);
     wall.setDens(rho);
     wall.setBlackness(epsilon);
     wall.setSpecificHeat(c, n1);
 
     Wall wall2(0.1, 0.2, 20, "steel");
+    wall2.setGrid();
     wall2.setLambdaT(T_table, lam, n1);
     wall2.setDens(rho);
     wall2.setBlackness(epsilon);
     wall2.setSpecificHeat(c, n1);
 
     Wall wall3(0.2, 0.25, 10, "steel");
+    wall3.setGrid();
     wall3.setLambdaT(T_table, lam, n1);
     wall3.setDens(rho);
     wall3.setBlackness(epsilon);

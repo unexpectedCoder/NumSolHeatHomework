@@ -9,7 +9,7 @@ using namespace std;
 Wall::Wall(double r1, double r2, size_t n, const std::string &material) :
   dataSize(0),
   is_lambda(false), is_T(false), is_rho(false),
-  is_c(false), is_r(false), is_T_table(false),
+  is_c(false), is_grid(false), is_T_table(false),
   epsilon(1.0), material(material)
 {
   if (r1 < 0.0 || fabs(r2 - r1) < EPS)
@@ -22,10 +22,6 @@ Wall::Wall(double r1, double r2, size_t n, const std::string &material) :
   N = n + 1;
   step = (r2 - r1) / (N - 1);
 
-  r = new double[N];
-  for (size_t i = 0; i < N; ++i)
-    r[i] = step * i;
-  is_r = true;
   // This array is used in vector, so memory is fully allocated here
   T = new double[N];
 }
@@ -53,7 +49,7 @@ Wall::Wall(const Wall &w)
   is_rho = w.is_rho;
   is_c = w.is_c;
   is_T = w.is_T;
-  is_r = w.is_r;
+  is_grid = w.is_grid;
 
   T_table = new double[dataSize];
   lambda = new double[dataSize];
@@ -66,13 +62,13 @@ Wall::Wall(const Wall &w)
   }
 
   r = new double[N];
+  for (size_t i = 0; i < N; ++i)
+    r[i] = w.r[i];
+
   T = new double[N];
   if (is_T)
     for (size_t i = 0; i < N; ++i)
-    {
-      r[i] = w.r[i];
       T[i] = w.T[i];
-    }
 }
 
 
@@ -82,7 +78,7 @@ Wall::~Wall()
   delete [] c;
   delete [] T_table;
 
-  if (is_r)
+  if (is_grid)
     delete [] r;
   if (is_T)
     delete [] T;
@@ -112,7 +108,7 @@ Wall& Wall::operator=(const Wall &w)
   is_rho = w.is_rho;
   is_c = w.is_c;
   is_T = w.is_T;
-  is_r = w.is_r;
+  is_grid = w.is_grid;
 
   T_table = new double[dataSize];
   lambda = new double[dataSize];
@@ -125,15 +121,24 @@ Wall& Wall::operator=(const Wall &w)
   }
 
   r = new double[N];
+  for (size_t i = 0; i < N; ++i)
+    r[i] = w.r[i];
+
   T = new double[N];
   if (is_T)
     for (size_t i = 0; i < N; ++i)
-    {
-      r[i] = w.r[i];
       T[i] = w.T[i];
-    }
 
   return *this;
+}
+
+
+void Wall::setGrid()
+{
+  r = new double[N];
+  for (size_t i = 0; i < N; ++i)
+    r[i] = r1 + step * i;
+  is_grid = true;
 }
 
 

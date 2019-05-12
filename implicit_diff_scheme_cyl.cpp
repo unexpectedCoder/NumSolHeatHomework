@@ -43,15 +43,6 @@ ImplicitDiffSchemeCyl::~ImplicitDiffSchemeCyl()
 }
 
 
-//void ImplicitDiffSchemeCyl::addWall(const Wall &w)
-//{
-//  walls.push_back(w);
-//  totalN += w.N - 1;
-//  wallsN++;
-//  is_walls = true;
-//}
-
-
 void ImplicitDiffSchemeCyl::setWalls(const Walls &ws)
 {
   for (WallCItr i = ws.begin(); i != ws.end(); ++i)
@@ -148,7 +139,7 @@ void ImplicitDiffSchemeCyl::solve(double dt, double delta_T)
   giveMemDF();
   prepareLInterp();
   prepareSInterp();
-//  calcDF(dt);
+  calcDF(dt);
 
   // TODO: make offsets for DF
 }
@@ -184,10 +175,7 @@ void ImplicitDiffSchemeCyl::setStartTemperature()
       throw err.sendEx("T(tau) was already initialized");
 
     for (size_t i = 0; i < itr->N; ++i)
-    {
-      itr->r[0] = itr->step * i;
       itr->T[i] = T0;
-    }
     itr->is_T = true;
   }
 }
@@ -298,32 +286,40 @@ void ImplicitDiffSchemeCyl::calcDF(double dt)
 
   size_t offset = 0;
   size_t wi = 0;
-  size_t n = walls[0].N;
+  size_t n = walls[wi].N - 1;
 
   for (size_t i = 1; i < totalN - 1; ++i)
   {
     if (i == n)
     {
-      cout << "i = " << i << '\n';
-      // TODO: calculate joint DF
+      // Joint place
 
-      n += offset;
+      cout << "i = " << i << '\n';
+      cout << "n = " << n << '\n';
+      cout << "offset = " << offset << "\n\n";
+
+      if (wi != wallsN - 1)
+      {
+//        TODO: calculate joint DF
+      }
+
       offset += walls[wi].N - wi;
+      n += walls[wi + 1].N - 1;
       wi++;
 
       continue;
     }
 
-    double *buf = calcTempCoeff(wi, i - (offset - 1), false);
-    double a1 = buf[0];
-    double a2 = buf[1];
+//    double *buf = calcTempCoeff(wi, i - (offset - 1), false);
+//    double a1 = buf[0];
+//    double a2 = buf[1];
 
-    A[i] = a1 * dt * (1.0 + 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
-    B[i] = a2 * dt * (1.0 - 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+//    A[i] = a1 * dt * (1.0 + 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
+//    B[i] = a2 * dt * (1.0 - 1.0 / (2.0 * i)) / pow(walls[wi].step, 2.0);
 
-    a[i] = A[i] / (1.0 + A[i] + B[i] * (1.0 - a[i - 1]));
-    b[i] = theta[t_ind][i] / A[i]
-           + B[i] / A[i] * a[i - 1] * b[i - 1];
+//    a[i] = A[i] / (1.0 + A[i] + B[i] * (1.0 - a[i - 1]));
+//    b[i] = theta[t_ind][i] / A[i]
+//           + B[i] / A[i] * a[i - 1] * b[i - 1];
   }
 }
 
@@ -358,8 +354,8 @@ double* ImplicitDiffSchemeCyl::calcTempCoeff(size_t wi, size_t i, bool is_joint)
     throw err.sendEx("the last wall doesn't have outer joint point");
 
   double *res = new double[2];
-//  double theta_p = 0.5 * (walls[wi].T[i] + walls[wi].T[i + 1]);
-//  double theta_m = 0.5 * (walls[wi].T[i - 1] + walls[wi].T[i]);
+  double theta_p = 0.5 * (walls[wi].T[i] + walls[wi].T[i + 1]);
+  double theta_m = 0.5 * (walls[wi].T[i - 1] + walls[wi].T[i]);
 
 //  if (is_joint)
 //  {
@@ -373,12 +369,10 @@ double* ImplicitDiffSchemeCyl::calcTempCoeff(size_t wi, size_t i, bool is_joint)
 //    double lam1 = lInterp(lLam[wi], walls[wi].T_table)
 //  }
 
-  double theta_p = 0.5 * (walls[wi].T[i] + walls[wi].T[i + 1]);
-  double theta_m = 0.5 * (walls[wi].T[i - 1] + walls[wi].T[i]);
-
   double c = sInterp(l_c[wi], walls[wi].T[i], acc);
   double rho = walls[wi].rho;
 
+  cout << theta_p << '\n' /*<< theta_m << '\n'*/;
   double lam1 = sInterp(lLam[wi], theta_p, acc);
   double lam2 = sInterp(lLam[wi], theta_m, acc);
 

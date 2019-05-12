@@ -63,7 +63,6 @@ public:
   ImplicitDiffSchemeCyl();
   ~ImplicitDiffSchemeCyl();
 
-//  void addWall(const Wall &w);
   void setWalls(const Walls &ws);
   void setStartConds(const StartConds &sc);
   void setFirstBound(const BoundCond &bc);

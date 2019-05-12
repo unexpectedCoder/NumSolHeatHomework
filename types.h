@@ -51,7 +51,7 @@ struct Wall
   bool is_T;              // Was the T(tau) initialized
   bool is_rho;            // Was the rho(T) initialized
   bool is_c;              // Was the c(T) initialized
-  bool is_r;              // Was the r initialized
+  bool is_grid;           // Was the r initialized
   bool is_T_table;        // Was the table temperature initialized
 
   double epsilon;         // Blackness
@@ -63,6 +63,7 @@ struct Wall
 
   Wall& operator=(const Wall &w);
 
+  void setGrid();
   void setLambdaT(const std::string& file_path);
   void setLambdaT(const double *T, const double *lam, size_t n);
   void setBlackness(double epsilon);
