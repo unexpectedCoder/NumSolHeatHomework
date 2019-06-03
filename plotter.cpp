@@ -92,6 +92,27 @@ void Plotter::setAxis(double x_min, double x_max,
   if (x_ticks < 2 || y_ticks < 2)
     throw err.sendEx("ticks must be > 1");
 
+  QFont labFont("Times New Roman");
+  labFont.setPixelSize(14);
+  axisX->setLabelsFont(labFont);
+  axisY->setLabelsFont(labFont);
+
+
+  QFont textFont("Times New Roman");
+  textFont.setPixelSize(18);
+  axisX->setTitleFont(textFont);
+  axisY->setTitleFont(textFont);
+
+  QPen axPen(Qt::black);
+  axPen.setWidth(2);
+  axisX->setLinePen(axPen);
+  axisY->setLinePen(axPen);
+
+  QPen grPen(Qt::black);
+  grPen.setWidth(1);
+  axisX->setGridLinePen(grPen);
+  axisY->setGridLinePen(grPen);
+
   axisX->setMin(x_min);
   axisX->setMax(x_max);
   axisX->setTickCount(x_ticks);

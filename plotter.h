@@ -9,6 +9,8 @@
 #include <QtCharts/QValueAxis>
 
 #include <QPainter>
+#include <QPen>
+#include <QFont>
 #include <QString>
 
 #include <vector>

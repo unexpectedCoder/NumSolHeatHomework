@@ -145,9 +145,8 @@ void ImplicitDiffSchemeCyl::solve(double dt, double delta_T)
   prepareLInterp();
   prepareSInterp();
 
-//  cout << "Interp: " << theta_buf[totalN - 1] << '\t' << sInterp(lLam[wallsN - 1], theta_buf[totalN - 1], acc) << '\n';
-
   double T_end = env.Ta + delta_T;
+
   while (*(Tw_vec.end() - 1) > T_end)
   {
     calcDF(dt);
@@ -305,10 +304,10 @@ void ImplicitDiffSchemeCyl::prepareSInterp()
 
 void ImplicitDiffSchemeCyl::giveMemDF()
 {
-  a = new double[totalN];
-  A = new double[totalN];
-  b = new double[totalN];
-  B = new double[totalN];
+  a = new double[totalN - 1];
+  A = new double[totalN - 1];
+  b = new double[totalN - 1];
+  B = new double[totalN - 1];
 }
 
 
@@ -355,8 +354,7 @@ void ImplicitDiffSchemeCyl::calcJointDF(double dt, size_t wi, size_t i)
   B[i] = _a * dt * (r[i] + r[i - 1]) / (r[i] * (r[i] - r[i - 1]) * (r[i + 1] - r[i - 1]));
 
   a[i] = A[i] / (1.0 + A[i] + B[i] * (1.0 - a[i - 1]));
-  b[i] = theta_buf[i] / A[i]
-         + B[i] / A[i] * a[i - 1] * b[i - 1];
+  b[i] = theta_buf[i] / A[i] + B[i] / A[i] * a[i - 1] * b[i - 1];
 }
 
 
@@ -390,7 +388,7 @@ void ImplicitDiffSchemeCyl::calcInnerDF(double dt, size_t wi, size_t i)
   A[i] = a1 * dt * (r[i] + r[i + 1])
          / (r[i] * (r[i + 1] - r[i]) * (r[i + 1] - r[i - 1]));
   B[i] = a2 * dt * (r[i] + r[i - 1])
-        / (r[i] * (r[i] - r[i - 1]) * (r[i + 1] - r[i - 1]));
+         / (r[i] * (r[i] - r[i - 1]) * (r[i + 1] - r[i - 1]));
 
   a[i] = A[i] / (1.0 + A[i] + B[i] * (1.0 - a[i - 1]));
   b[i] = theta_buf[i] / A[i] + B[i] / A[i] * a[i - 1] * b[i - 1];
@@ -417,11 +415,9 @@ double* ImplicitDiffSchemeCyl::calcTempCoeffs(size_t wi, size_t i)
 
 void ImplicitDiffSchemeCyl::calcTemperature()
 {
-
-  double lam = lInterp(lLam[wallsN - 1], theta_buf[totalN - 1], lAcc);
-
   calcAlphaSum(theta_buf[totalN - 1]);
 
+  double lam = lInterp(lLam[wallsN - 1], theta_buf[totalN - 1], lAcc);
   double c1 = env.Ta * alphaS * walls[wallsN - 1].step / lam;
   double c2 = a[totalN - 2] * b[totalN - 2];
   double c3 = 1.0 - a[totalN - 2];
@@ -429,14 +425,14 @@ void ImplicitDiffSchemeCyl::calcTemperature()
 
   size_t i = totalN - 2;
   theta_buf[totalN - 1] = (c1 + c2) / (c3 + c4);
-  while (i + 1 > 0)
+  while (i != 0)
   {
     theta_buf[i] = a[i] * (b[i] + theta_buf[i + 1]);
     i--;
   }
+  theta_buf[0] = a[0] * (b[0] + theta_buf[1]);
 
   // Writing results
-  theta.push_back(theta_buf);
   Tw_vec.push_back(theta_buf[totalN - 1]);
 }
 
@@ -444,10 +440,28 @@ void ImplicitDiffSchemeCyl::calcTemperature()
 void ImplicitDiffSchemeCyl::calcAlphaSum(double th)
 {
   double T = 0.5 * (th + env.Ta);
-  double Gr = g * (th - env.Ta) / T * pow(H, 3.0)
+  double Gr = g * (th - env.Ta) / T * pow(2.0 * walls[wallsN - 1].r2, 3.0)
               / pow(sInterp(sEnv_nu, T, sAcc), 2.0);
-  double Nu = 0.55 * pow(Gr * sInterp(sEnv_Pr, T, sAcc), 0.25);
-  double al_c = sInterp(sEnv_lam, T, sAcc) * Nu / H;
+
+  double  c = 0.0,
+          n = 0.0;
+  double Pr = sInterp(sEnv_Pr, T, sAcc);
+
+  // Heat criterion's coeffs
+  if (Gr * Pr > 5e2 && Gr * Pr < 2e7)
+  {
+    c = 0.54;
+    n = 0.25;
+  }
+  else if (Gr * Pr > 2e7)
+  {
+    c = 0.135;
+    n = 0.333;
+  }
+
+  // Heat criterion (horizontal cyl)
+  double Nu = c * pow(Gr * Pr, n);
+  double al_c = sInterp(sEnv_lam, T, sAcc) * Nu / (2.0 * walls[wallsN - 1].r2);
   double q_r = C * walls[wallsN - 1].epsilon
                * (pow(th / 100.0, 4.0) - pow(env.Ta / 100.0, 4.0));
   double al_r = q_r / (th - env.Ta);
